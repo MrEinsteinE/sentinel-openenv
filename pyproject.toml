@@ -1,0 +1,39 @@
+[project]
+name = "openenv-sentinel"
+version = "0.1.0"
+description = "Multi-agent OpenEnv for scalable LLM oversight"
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "pydantic>=2.6.0",
+    "requests>=2.31.0",
+    "httpx>=0.27.0,<0.29.0",
+    "openai>=1.58.0",
+    "python-dotenv>=1.0.0",
+    "gradio>=5.0.0,<6.0.0",
+    "openenv-core[core]>=0.2.3",
+]
+
+[project.optional-dependencies]
+train = [
+    "unsloth>=2025.3.0",
+    "trl>=0.12.0",
+    "peft>=0.11.0",
+    "accelerate>=0.28.0",
+    "datasets>=2.18.0",
+    "vllm>=0.6.0",
+]
+
+[project.scripts]
+server = "server.app:main"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"sentinel" = ".", "sentinel.server" = "server"}
+packages = ["sentinel", "sentinel.server"]

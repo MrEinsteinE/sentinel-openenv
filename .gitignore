@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+.env
+.idea/
+.vscode/
+*.log
+.pytest_cache/
+checkpoints/
+outputs/
+wandb/
+.DS_Store
+eval_data/runs/
