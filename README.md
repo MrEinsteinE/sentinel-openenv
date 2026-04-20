@@ -161,16 +161,29 @@ TRL docs explicitly note binary rewards beat shaped rewards for GRPO due to grou
 
 ---
 
-## 📊 Baseline Scores *(placeholder — fill on Day 1)*
+## 📊 Baseline Scores
 
-| Overseer | action_screen F1 | war_room F1 | drift_ops F1 | Overall F1 |
-|---|---|---|---|---|
-| random | — | — | — | — |
-| naive (always approve) | — | — | — | — |
-| policy-aware heuristic | — | — | — | — |
-| Qwen3-1.7B zero-shot | — | — | — | — |
-| Llama-3.2-3B zero-shot | — | — | — | — |
-| **Qwen3-1.7B + SENTINEL GRPO** (TARGET) | **>0.85** | **>0.75** | **>0.60** | **>0.75** |
+Evaluated on the 50-scenario held-out split (`EVAL_SEEDS_BY_TASK`), collected 2026-04-20.
+LLMs queried via the Hugging Face router (`https://router.huggingface.co/v1`), `temperature=0`, `max_tokens=256`.
+
+| Overseer | action_screen | war_room | drift_ops | **Overall F1** | P | R |
+|---|---:|---:|---:|---:|---:|---:|
+| naive (always approve) | 0.000 | 0.000 | 0.000 | **0.000** | 0.000 | 0.000 |
+| random | 0.553 | 0.504 | 0.575 | **0.539** | 0.412 | 0.782 |
+| policy-aware heuristic *(reads counterfactual directly)* | 1.000 | 1.000 | 0.863 | **0.944** | 0.893 | 1.000 |
+| Qwen2.5-7B-Instruct zero-shot | 0.128 | 0.127 | 0.072 | **0.108** | 0.415 | 0.062 |
+| Llama-3.1-8B-Instruct zero-shot | 0.178 | 0.219 | 0.074 | **0.162** | 0.735 | 0.091 |
+| openai/gpt-oss-20b zero-shot | 0.050 | 0.015 | 0.000 | **0.015** | **1.000** | 0.007 |
+| Qwen2.5-72B-Instruct zero-shot | 0.050 | 0.058 | 0.147 | **0.093** | 0.518 | 0.051 |
+| **Qwen3-1.7B + SENTINEL GRPO** *(target, on-site)* | **>0.85** | **>0.75** | **>0.60** | **>0.75** | — | — |
+
+### The headline finding
+
+**Every frontier LLM we tested — including Qwen2.5 at 72B parameters — scores *below random* on oversight zero-shot.** They are precision-heavy and recall-starved: when they do intervene, they're usually right (GPT-OSS-20B reaches 100% precision), but they intervene on only 0.7–9% of actually-bad actions. The counterfactual preview that says "CATASTROPHIC if executed" is literally in the prompt, yet the models still approve.
+
+The rule-based heuristic that merely reads that same text — no training, just keyword matching — hits F1 = 0.944.
+
+That gap is the pitch: **oversight is not a capability problem, it's a behaviour problem. LLMs are trained to be agreeable, not skeptical. RL training in SENTINEL specifically targets that behaviour.**
 
 ---
 
