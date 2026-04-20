@@ -413,7 +413,19 @@ def _build_gradio_ui() -> gr.Blocks:
 
 
 _gradio_demo = _build_gradio_ui()
-app = gr.mount_gradio_app(app, _gradio_demo, path="/")
+# Mount Gradio at `/web` — matches the OpenEnv CLI's README frontmatter
+# (`base_path: /web`) which HF Spaces uses as the iframe source. Also provide
+# a root redirect so direct `https://<space>.hf.space/` still lands in the UI.
+app = gr.mount_gradio_app(app, _gradio_demo, path="/web")
+
+
+from fastapi.responses import RedirectResponse
+
+
+@app.get("/", include_in_schema=False)
+def _root_redirect():
+    """Redirect root to the Gradio UI mount point."""
+    return RedirectResponse(url="/web", status_code=307)
 
 
 def main():
