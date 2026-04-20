@@ -1,0 +1,28 @@
+{
+  "n_raw": 5940,
+  "n_balanced": 321,
+  "min_just_score": 0.3,
+  "per_decision_cap": 150,
+  "decision_counts": {
+    "approve": 150,
+    "block": 150,
+    "flag": 21
+  },
+  "class_counts": {
+    "correct": 105,
+    "catastrophic": 69,
+    "wrong": 81,
+    "neutral": 45,
+    "ambiguous": 21
+  },
+  "task_counts": {
+    "war_room": 104,
+    "drift_ops": 186,
+    "action_screen": 31
+  },
+  "confusion_counts": {
+    "tn": 150,
+    "tp": 171
+  },
+  "out": "eval_data\\rft_dataset.jsonl"
+}
