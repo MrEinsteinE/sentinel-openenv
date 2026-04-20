@@ -1,4 +1,4 @@
-FROM ghcr.io/meta-pytorch/openenv-base:latest
+FROM python:3.11.11-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
@@ -6,6 +6,11 @@ ENV SENTINEL_HOST=0.0.0.0
 ENV SENTINEL_PORT=7860
 
 WORKDIR /app
+
+# System deps for git (pip-install-from-git needs it for openenv-core)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      git curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir --timeout=180 -r requirements.txt
