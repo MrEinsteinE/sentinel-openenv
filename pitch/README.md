@@ -2,26 +2,35 @@
 
 15-slide Marp deck for the 3-minute pitch. Source of truth is `slides.md` (markdown) with styling in `theme.css`.
 
-## Render
+## Render — pick the path that fits your setup
+
+### Option A — Zero install · **web.marp.app** (recommended if Node is missing or old)
+
+1. Open https://web.marp.app/
+2. Paste the contents of `slides.md` into the left pane
+3. Open `theme.css`, copy its contents, and paste them into the frontmatter `style:` block (or click "Upload" and attach theme.css)
+4. Click **Export → PDF** (or PPTX) · download
+
+Takes 60 seconds. Renders identically to the CLI.
+
+### Option B — VS Code Marp extension (best for iterating)
+
+Install [Marp for VS Code](https://marketplace.visualstudio.com/items?itemName=marp-team.marp-vscode).
+Open `slides.md` → live preview pane appears.
+Command palette → *Marp: Export slide deck* → PDF / PPTX.
+
+### Option C — Marp CLI (requires Node.js ≥ 20)
 
 ```bash
-# One-off install
 npm install -g @marp-team/marp-cli
-
-# PDF export (fastest path for on-site pitch)
 marp slides.md --theme theme.css --pdf --allow-local-files --output sentinel-pitch.pdf
-
-# PowerPoint export (for judges' laptops or backup)
 marp slides.md --theme theme.css --pptx --allow-local-files --output sentinel-pitch.pptx
-
-# Live preview
-marp slides.md --theme theme.css --watch --server
-# Opens http://localhost:8080
+marp slides.md --theme theme.css --watch --server    # live preview on :8080
 ```
 
-## VS Code alternative
+### If your Node is old (pre-20)
 
-Install the [Marp for VS Code](https://marketplace.visualstudio.com/items?itemName=marp-team.marp-vscode) extension — slides.md gets a live preview pane automatically.
+Install a modern Node via [nodejs.org](https://nodejs.org/) (current LTS) or via `nvm`. This project only used Node for the Marp step — nothing else depends on it.
 
 ## Slide map (15 slides)
 
