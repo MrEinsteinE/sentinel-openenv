@@ -84,6 +84,14 @@ from typing import Any
 
 import requests
 
+# vLLM 0.9.x v1 engine raises "AoT scheduling is required for full cuda graph"
+# when unsloth_zoo constructs LLM(...) with default cudagraph settings. Falling
+# back to the legacy v0 engine sidesteps that check; v0 is still functional in
+# vllm 0.9.x and is the documented workaround used by current unsloth users.
+# Must be set BEFORE any import path that loads vllm (vllm.envs reads it at
+# import time). setdefault keeps a job-level override (-e VLLM_USE_V1=...) wins.
+os.environ.setdefault("VLLM_USE_V1", "0")
+
 SENTINEL_URL = os.environ.get("SENTINEL_URL", "https://elliot89-sentinel.hf.space")
 GIT_REPO = os.environ.get("GIT_REPO", "https://github.com/MrEinsteinE/sentinel-openenv")
 GIT_BRANCH = os.environ.get("GIT_BRANCH", "main")
