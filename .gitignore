@@ -8,8 +8,20 @@ __pycache__/
 .vscode/
 *.log
 .pytest_cache/
-checkpoints/
-outputs/
-wandb/
-.DS_Store
+
+# Eval bookkeeping (per-run only — baseline JSONs are tracked)
 eval_data/runs/
+
+# Training run outputs that are too large for git.
+# `training/plots/` and `training/run_summary.json` ARE tracked.
+# `training/checkpoints/` is NOT — adapter weights live on the HF model repo.
+training/checkpoints/
+*.safetensors
+*.bin
+outputs/
+checkpoints/
+wandb/
+training/.ipynb_checkpoints/
+training/unsloth_compiled_cache/
+
+.DS_Store
