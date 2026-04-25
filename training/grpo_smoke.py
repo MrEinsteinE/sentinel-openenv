@@ -204,7 +204,7 @@ def main():
     cfg = GRPOConfig(
         use_vllm=True,
         vllm_mode="colocate",
-        chat_template_kwargs={"enable_thinking": False},
+        # `chat_template_kwargs` requires trl>=0.22; we are pinned to 0.21.0.
         max_completion_length=1024,
         num_generations=2,
         per_device_train_batch_size=1,

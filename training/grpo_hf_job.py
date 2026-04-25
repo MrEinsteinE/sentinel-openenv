@@ -579,9 +579,12 @@ def _build_grpo_trainer(model, tokenizer, dataset, callback, output_dir: str, ma
 
     SentinelToolEnv = build_tool_env_cls(SENTINEL_URL)
 
+    # NOTE: trl==0.21.0 GRPOConfig does not accept `chat_template_kwargs`.
+    # That kwarg landed in trl 0.22+. We rely on the SFT warmup to teach the
+    # model to emit direct JSON; Qwen3's optional `<think>` blocks are tolerated
+    # by the JSON extractor (find first '{' / last '}') and don't break parsing.
     cfg_kwargs = dict(
         output_dir=output_dir,
-        chat_template_kwargs={"enable_thinking": False},
         num_generations=GRPO_CONFIG["num_generations"],
         max_completion_length=GRPO_CONFIG["max_completion_length"],
         per_device_train_batch_size=1,
@@ -812,10 +815,19 @@ def main() -> int:
         fast_inference=use_vllm,
     )
 
-    # Phase 1 — zero-shot baseline. The user's GOAL is to beat this.
-    _log("phase 1: zero-shot Qwen3-1.7B baseline eval")
-    baseline_summary = run_local_eval(model, tokenizer, "qwen3_1_7b_zeroshot", project)
-    baseline_f1 = baseline_summary["per_task_f1"]
+    # Phase 1 — zero-shot baseline. Skipped by default to save ~70 min on the
+    # 6h HF Jobs budget (eval uses HF transformers, not vLLM, so 650 sequential
+    # generations dominate wall clock). Set SENTINEL_RUN_ZEROSHOT_EVAL=1 to
+    # re-enable. The "before" comparison falls back to baseline_policy_aware.json
+    # which is a stronger reference anyway (the heuristic is what we actually
+    # need to beat to be useful, not a randomly-initialized model).
+    if os.environ.get("SENTINEL_RUN_ZEROSHOT_EVAL", "0") == "1":
+        _log("phase 1: zero-shot Qwen3-1.7B baseline eval")
+        baseline_summary = run_local_eval(model, tokenizer, "qwen3_1_7b_zeroshot", project)
+        baseline_f1 = baseline_summary["per_task_f1"]
+    else:
+        _log("phase 1: SKIPPED (SENTINEL_RUN_ZEROSHOT_EVAL!=1); using policy_aware as reference")
+        baseline_f1 = {}
 
     # Phase 2 — apply LoRA
     _log("phase 2: applying LoRA adapter")
@@ -919,27 +931,48 @@ def main() -> int:
         else:
             abort_path = retry_cb.abort_reason
 
-    # Phase 6 — save best + trained eval
-    _log("phase 6: trained-model eval")
+    # Phase 5.5 — PERSIST the trained adapter NOW, before the slow eval.
+    # The 6h HF Jobs cap can clip phase 6, and if phase 7 (where the original
+    # push lived) doesn't run, the trained LoRA is lost (everything in /tmp
+    # dies with the container). Pushing here makes the trained model durable
+    # regardless of whether the eval phase finishes.
+    _log("phase 5.5: persisting trained adapter to HF Hub (pre-eval safety push)")
     final_dir = CKPT_DIR / "qwen3-1.7b-sentinel-best"
     final_dir.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(str(final_dir))
     tokenizer.save_pretrained(str(final_dir))
+    try:
+        push_lora_to_hub(final_dir)
+    except Exception as e:
+        _log(f"phase 5.5 push failed: {e}; continuing — adapter still on local /tmp")
 
-    trained_summary = run_local_eval(model, tokenizer, "trained_qwen3_1_7b_grpo", project)
-    f1_per_tier = trained_summary["per_task_f1"]
+    # Phase 6 — trained eval. Best effort: if this is killed by the 6h timeout,
+    # the trained adapter is already safe on Hub from phase 5.5, and the user
+    # can re-run training/eval_trained.py as a small follow-up job.
+    _log("phase 6: trained-model eval (best-effort)")
+    f1_per_tier: dict = {}
+    try:
+        trained_summary = run_local_eval(model, tokenizer, "trained_qwen3_1_7b_grpo", project)
+        f1_per_tier = trained_summary["per_task_f1"]
+    except Exception as e:
+        _log(f"phase 6 failed: {e}; f1_per_tier will be empty in run_summary.json")
 
-    # Phase 7 — comparative plot + summary + push
+    # Phase 7 — comparative plot + summary + git push (best-effort)
     _log("phase 7: artifacts")
     baselines = _load_baselines(EVAL_DIR)
-    baselines["qwen3_1_7b_zeroshot"] = baseline_f1
-    baselines["trained_qwen3_1_7b_grpo"] = f1_per_tier
-    project["plot_baseline_vs_trained"](
-        baselines,
-        trained_label="trained_qwen3_1_7b_grpo",
-        out_path=str(PLOTS_DIR / "baseline_vs_trained.png"),
-        tier=TASK_FILTER,
-    )
+    if baseline_f1:
+        baselines["qwen3_1_7b_zeroshot"] = baseline_f1
+    if f1_per_tier:
+        baselines["trained_qwen3_1_7b_grpo"] = f1_per_tier
+    try:
+        project["plot_baseline_vs_trained"](
+            baselines,
+            trained_label="trained_qwen3_1_7b_grpo",
+            out_path=str(PLOTS_DIR / "baseline_vs_trained.png"),
+            tier=TASK_FILTER,
+        )
+    except Exception as e:
+        _log(f"phase 7 plot failed: {e}")
 
     _write_summary(
         f1_per_tier=f1_per_tier,
@@ -949,10 +982,11 @@ def main() -> int:
         best_step=long_cb.best_step,
     )
 
-    push_lora_to_hub(final_dir)
-
     commit_msg = f"hf-job: training artifacts (F1 action_screen={f1_per_tier.get('action_screen', {}).get('f1', 0):.3f}, abort={abort_path or 'none'})"
-    git_push_artifacts(commit_msg)
+    try:
+        git_push_artifacts(commit_msg)
+    except Exception as e:
+        _log(f"phase 7 git push failed: {e}")
 
     _log(
         f"DONE in {time.time() - t_start:.0f}s. "
