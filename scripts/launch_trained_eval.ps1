@@ -5,10 +5,16 @@
 # capture, updates run_summary.json["f1_per_tier"], regenerates
 # baseline_vs_trained.png, and pushes everything back to GitHub.
 #
-# Use this AFTER training has completed (LoRA pushed to Hub) when the
-# eval_data/baseline_qwen3_1_7b_trained.json file is missing locally
-# (e.g. the original run's artifact filter dropped it). Wall clock on l4x1
-# is ~60-90 min (eval uses transformers.generate, not vLLM).
+# Phase 3 update (combined eval): when the existing zero-shot baseline JSON
+# is summary-only (no per-turn data), the job ALSO re-runs the zero-shot
+# eval in verbose mode FIRST, before applying the LoRA. This gives both
+# verbose JSONs needed by tools/find_before_after.py from a single launch.
+# Set SENTINEL_SKIP_ZEROSHOT_RERUN=1 to force-skip the zero-shot pass if
+# the verbose JSON is already on disk.
+#
+# Wall clock on l4x1 is:
+#   ~60-90 min  trained-only (zero-shot already verbose on disk)
+#   ~150-180 min combined (zero-shot rerun + trained eval)
 #
 # Prerequisites are identical to launch_hf_job.ps1:
 #   1) Activate venv with huggingface_hub>=0.27.
@@ -20,6 +26,13 @@
 #     ./scripts/launch_trained_eval.ps1
 
 $ErrorActionPreference = "Stop"
+
+# `hf jobs uv run` is marked experimental in huggingface_hub and emits a
+# UserWarning on stderr at import time. With $ErrorActionPreference = "Stop",
+# PowerShell treats any stderr output from a native command as a terminating
+# error and kills the script BEFORE the job is ever submitted. Silence the
+# warning so the launcher actually reaches `hf @argv`.
+$env:HF_HUB_DISABLE_EXPERIMENTAL_WARNING = "1"
 
 $env:PYTHONIOENCODING = "utf-8"
 $env:PYTHONUTF8 = "1"
@@ -35,11 +48,11 @@ function Get-OrDefault {
     if ([string]::IsNullOrEmpty($v)) { return $Default } else { return $v }
 }
 
-# 2h is generous for a single eval pass over EVAL_SEEDS_BY_TASK
-# (~50 episodes x ~13 steps x ~200 tokens). On l4x1 with HF generate
-# expect ~60-90 min, like the zero-shot pass.
+# 4h is generous for the combined zero-shot rerun + trained eval (~3h on l4x1).
+# Override with $env:TIMEOUT='2h' for trained-only when the verbose zero-shot
+# JSON is already on disk.
 $Flavor      = Get-OrDefault "FLAVOR"        "l4x1"
-$Timeout     = Get-OrDefault "TIMEOUT"       "2h"
+$Timeout     = Get-OrDefault "TIMEOUT"       "4h"
 $SentinelUrl = Get-OrDefault "SENTINEL_URL"  "https://elliot89-sentinel.hf.space"
 $GitRepo     = Get-OrDefault "GIT_REPO"      "https://github.com/MrEinsteinE/sentinel-openenv"
 $GitBranch   = Get-OrDefault "GIT_BRANCH"    "main"

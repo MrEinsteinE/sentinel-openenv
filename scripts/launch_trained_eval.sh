@@ -3,8 +3,12 @@
 # downloads the trained LoRA from MODEL_REPO and runs the held-out eval
 # (SENTINEL_TRAINED_EVAL_ONLY=1) with per-turn capture.
 #
-# Use this AFTER training has completed (LoRA pushed to Hub) when the
-# eval_data/baseline_qwen3_1_7b_trained.json file is missing locally.
+# Phase 3 update: when the existing zero-shot baseline JSON is summary-only
+# (no per-turn data), the job ALSO re-runs the zero-shot eval in verbose
+# mode FIRST, before applying the LoRA. Set SENTINEL_SKIP_ZEROSHOT_RERUN=1
+# to force-skip when verbose data is already on disk.
+#
+# Wall clock on l4x1: ~60-90 min trained-only, ~150-180 min combined.
 #
 # Usage:
 #     export GITHUB_TOKEN="ghp_xxx"
@@ -12,8 +16,13 @@
 
 set -euo pipefail
 
+# Silences a UserWarning from huggingface_hub that the PowerShell sister
+# script otherwise treats as a terminating error. Bash is more forgiving
+# but exporting it here keeps logs clean for both launchers.
+export HF_HUB_DISABLE_EXPERIMENTAL_WARNING="${HF_HUB_DISABLE_EXPERIMENTAL_WARNING:-1}"
+
 FLAVOR="${FLAVOR:-l4x1}"
-TIMEOUT="${TIMEOUT:-2h}"
+TIMEOUT="${TIMEOUT:-4h}"
 SENTINEL_URL="${SENTINEL_URL:-https://elliot89-sentinel.hf.space}"
 GIT_REPO="${GIT_REPO:-https://github.com/MrEinsteinE/sentinel-openenv}"
 GIT_BRANCH="${GIT_BRANCH:-main}"
