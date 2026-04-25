@@ -146,10 +146,17 @@ if __name__ == "__main__" and not os.environ.get("SENTINEL_SKIP_BOOTSTRAP"):
 # bootstrap above runs first, so these are valid at import time.
 def _import_project():
     """Import project modules. Called from main() to keep import errors local."""
-    from eval import _format_llm_prompt, run_episode  # noqa: E402
+    from eval import _format_llm_prompt, heuristic_responder, run_episode  # noqa: E402
     from graders import compute_f1  # noqa: E402
-    from models import OverseerDecision  # noqa: E402
-    from scenarios import EVAL_SEEDS_BY_TASK  # noqa: E402
+    from models import (  # noqa: E402
+        Action,
+        ActionParameters,
+        OverseerAction,
+        OverseerDecision,
+        ResponderAction,
+        ResponderRole,
+    )
+    from scenarios import EVAL_SEEDS_BY_TASK, TASKS  # noqa: E402
     from server.environment import SentinelEnvironment  # noqa: E402
 
     sys.path.insert(0, str(WORKDIR / "training"))
@@ -161,9 +168,16 @@ def _import_project():
 
     return dict(
         _format_llm_prompt=_format_llm_prompt,
+        heuristic_responder=heuristic_responder,
         run_episode=run_episode,
         compute_f1=compute_f1,
+        Action=Action,
+        ActionParameters=ActionParameters,
+        OverseerAction=OverseerAction,
         OverseerDecision=OverseerDecision,
+        ResponderAction=ResponderAction,
+        ResponderRole=ResponderRole,
+        TASKS=TASKS,
         EVAL_SEEDS_BY_TASK=EVAL_SEEDS_BY_TASK,
         SentinelEnvironment=SentinelEnvironment,
         plot_loss=plot_loss,
@@ -840,12 +854,104 @@ def make_overseer_fn(model, tokenizer, project, max_new_tokens: int = 200):
     return fn
 
 
+def _play_episode_verbose(env, task_id: str, seed: int, overseer_fn, project) -> dict[str, Any]:
+    """Play one episode with full turn-by-turn capture (mirrors
+    scripts/before_after_demo.py:play_rollout). Returns the same shape as
+    eval.run_episode but also includes a `turns` list with per-step
+    {action_type, parameters, decision, justification, class, confusion,
+    counterfactual, severity} — required for downstream before/after mining."""
+    SentinelEnvironment = project["SentinelEnvironment"]
+    Action = project["Action"]
+    ActionParameters = project["ActionParameters"]
+    OverseerAction = project["OverseerAction"]
+    ResponderAction = project["ResponderAction"]
+    ResponderRole = project["ResponderRole"]
+    heuristic_responder = project["heuristic_responder"]
+    compute_f1 = project["compute_f1"]
+    TASKS = project["TASKS"]
+
+    rng = random.Random(seed ^ 0xF00D)
+    env.reset(task_id=task_id, seed=seed, mode="alternating")
+
+    turns: list[dict[str, Any]] = []
+    step_safety = TASKS[task_id]["max_steps"] * 4
+    while True:
+        s = env._get_session()
+        if s["done"] or len(turns) >= step_safety:
+            break
+        at, params, reasoning = heuristic_responder(env, rng)
+        ap = ActionParameters(**{k: v for k, v in params.items() if v is not None})
+        proposal = ResponderAction(
+            responder_role=ResponderRole.GENERIC,
+            action_type=at,
+            parameters=ap,
+            reasoning=reasoning,
+        )
+        obs_after_propose, _, _, _ = env.step(Action(role="responder", responder=proposal))
+        if env._get_session()["done"]:
+            break
+        snapshot = obs_after_propose
+        decision, justification = overseer_fn(snapshot, rng)
+        obs, reward2, _done, info2 = env.step(
+            Action(
+                role="overseer",
+                overseer=OverseerAction(decision=decision, justification=justification),
+            )
+        )
+        klass = info2.get("overseer_class", "?")
+        conf = info2.get("overseer_confusion_delta", "?")
+        cf = snapshot.proposed_action.counterfactual if snapshot.proposed_action else ""
+        sev = snapshot.proposed_action.severity_weight if snapshot.proposed_action else 1.0
+        turns.append({
+            "step": obs.step_count,
+            "action_type": at,
+            "parameters": params,
+            "responder_reasoning": reasoning,
+            "counterfactual": cf,
+            "severity": sev,
+            "class": klass,
+            "decision": decision.value,
+            "justification": justification,
+            "executed": info2.get("executed", False),
+            "confusion": conf,
+            "overseer_reward": reward2.overseer_score,
+            "cumulative_overseer_reward": obs.cumulative_overseer_reward,
+            "drift_events": list(obs.drift_events),
+        })
+
+    final = env.state()
+    incident = ""
+    services: list[str] = []
+    try:
+        sc = env._get_session()["scenario"]
+        incident = sc.get("incident_summary", "")
+        services = list(sc.get("known_services", []))
+    except Exception:
+        pass
+
+    return {
+        "task_id": task_id,
+        "seed": seed,
+        "scenario_id": final.scenario_id,
+        "incident_summary": incident,
+        "known_services": services,
+        "overseer_confusion": dict(final.overseer_confusion),
+        "overseer_f1": compute_f1(final.overseer_confusion),
+        "overseer_cumulative_reward": final.cumulative_overseer_reward,
+        "responder_cumulative_reward": final.cumulative_responder_reward,
+        "drift_events_n": len(final.drift_events),
+        "steps": final.step_count,
+        "turns": turns,
+    }
+
+
 def run_local_eval(model, tokenizer, label: str, project) -> dict[str, Any]:
     """Run the SENTINEL eval harness against EVAL_SEEDS_BY_TASK using the
-    currently-loaded model. Writes eval_data/baseline_<label>.json."""
+    currently-loaded model. Captures per-turn data so downstream tools can
+    mine before/after pairs without a second pass. Writes
+    eval_data/baseline_<label>.json."""
     EVAL_SEEDS_BY_TASK = project["EVAL_SEEDS_BY_TASK"]
     SentinelEnvironment = project["SentinelEnvironment"]
-    run_episode = project["run_episode"]
     compute_f1 = project["compute_f1"]
 
     fn = make_overseer_fn(model, tokenizer, project)
@@ -859,7 +965,9 @@ def run_local_eval(model, tokenizer, label: str, project) -> dict[str, Any]:
     t0 = time.time()
     for task_id, seeds in EVAL_SEEDS_BY_TASK.items():
         for seed in seeds:
-            ep = run_episode(env, task_id, seed, fn)
+            ep_t0 = time.time()
+            ep = _play_episode_verbose(env, task_id, seed, fn, project)
+            ep["wall_ms"] = int(1000 * (time.time() - ep_t0))
             all_eps.append(ep)
             for k, v in ep["overseer_confusion"].items():
                 per_task_conf[task_id][k] += v
@@ -884,6 +992,7 @@ def run_local_eval(model, tokenizer, label: str, project) -> dict[str, Any]:
         "overall_f1": overall_f1,
         "n_episodes": len(all_eps),
         "wall_clock_s": round(dt, 1),
+        "episodes": all_eps,
     }
     EVAL_DIR.mkdir(parents=True, exist_ok=True)
     out = EVAL_DIR / f"baseline_{label}.json"
@@ -943,7 +1052,8 @@ def git_push_artifacts(commit_message: str) -> None:
         "training/plots/",
         "training/run_summary.json",
         "eval_data/baseline_qwen3_1_7b_zeroshot.json",
-        "eval_data/trained_qwen3_1_7b.json",
+        "eval_data/baseline_qwen3_1_7b_trained.json",
+        "eval_data/baseline_trained_qwen3_1_7b_grpo.json",
     ]
     existing: list[str] = []
     for rel in candidates:
@@ -1059,7 +1169,8 @@ def main() -> int:
                 project["plot_baseline_vs_trained"](
                     baselines,
                     trained_label="trained_qwen3_1_7b_grpo",
-                    output_path=str(PLOTS_DIR / "baseline_vs_trained.png"),
+                    out_path=str(PLOTS_DIR / "baseline_vs_trained.png"),
+                    tier=TASK_FILTER,
                 )
                 _log("re-rendered baseline_vs_trained.png with zero-shot row")
             else:
@@ -1076,6 +1187,87 @@ def main() -> int:
             f"{k}={v.get('f1', 0):.3f}" for k, v in baseline_f1.items()
         )
         _log(f"DONE in {time.time() - t_start:.0f}s. zero-shot F1: {per_tier}")
+        return 0
+
+    # TRAINED-EVAL-ONLY short-circuit. When SENTINEL_TRAINED_EVAL_ONLY=1, we
+    # skip SFT/GRPO and instead download the previously-trained LoRA from
+    # MODEL_REPO (Hub), apply it to the loaded base model with PeftModel, run
+    # the held-out eval (capturing per-turn data so before/after mining is a
+    # pure file-read afterwards), update training/run_summary.json with the
+    # trained F1 per tier, regenerate baseline_vs_trained.png, and push.
+    # Used to recover the per-seed JSON that was lost when the original 6h
+    # HF Job's artifact filter didn't match the trained eval filename.
+    if os.environ.get("SENTINEL_TRAINED_EVAL_ONLY", "0") == "1":
+        _log("TRAINED-EVAL-ONLY mode: downloading LoRA from Hub and running verbose eval")
+
+        from huggingface_hub import snapshot_download
+        from peft import PeftModel
+
+        adapter_local = WORKDIR / "downloaded_adapter"
+        if not (adapter_local / "adapter_config.json").exists():
+            _log(f"snapshot_download({MODEL_REPO}) -> {adapter_local}")
+            snapshot_download(
+                repo_id=MODEL_REPO,
+                repo_type="model",
+                local_dir=str(adapter_local),
+                token=os.environ.get("HF_TOKEN"),
+            )
+        else:
+            _log(f"adapter already present at {adapter_local}")
+
+        _log(f"applying LoRA from {adapter_local}")
+        model = PeftModel.from_pretrained(model, str(adapter_local))
+        model.eval()
+        try:
+            FastLanguageModel.for_inference(model)
+        except Exception as e:
+            _log(f"FastLanguageModel.for_inference unavailable: {e}; using model.eval()")
+
+        _log("phase 6: trained Qwen3-1.7B eval (verbose, per-turn)")
+        trained_summary = run_local_eval(model, tokenizer, "qwen3_1_7b_trained", project)
+        trained_f1 = trained_summary["per_task_f1"]
+
+        summary_path = WORKDIR / "training" / "run_summary.json"
+        summary_path.parent.mkdir(parents=True, exist_ok=True)
+        existing: dict[str, Any] = {}
+        if summary_path.exists():
+            try:
+                existing = json.loads(summary_path.read_text())
+            except Exception:
+                existing = {}
+        existing["f1_per_tier"] = trained_f1
+        existing["trained_overall_f1"] = trained_summary["overall_f1"]
+        cfg_blk = existing.setdefault("config", {})
+        cfg_blk.setdefault("pins", PINS)
+        cfg_blk.setdefault("task_filter", TASK_FILTER)
+        summary_path.write_text(json.dumps(existing, indent=2))
+        _log(f"updated {summary_path} with trained F1 per tier")
+
+        try:
+            baselines = _load_baselines(EVAL_DIR)
+            baselines["qwen3_1_7b_trained"] = trained_f1
+            zs_f1 = existing.get("baseline_qwen3_1_7b_zeroshot_f1_per_tier") or {}
+            if zs_f1:
+                baselines["qwen3_1_7b_zeroshot"] = zs_f1
+            project["plot_baseline_vs_trained"](
+                baselines,
+                trained_label="qwen3_1_7b_trained",
+                out_path=str(PLOTS_DIR / "baseline_vs_trained.png"),
+                tier=TASK_FILTER,
+            )
+            _log("re-rendered baseline_vs_trained.png with trained row")
+        except Exception as e:
+            _log(f"plot regen failed: {e}")
+
+        try:
+            git_push_artifacts("hf-job: trained Qwen3-1.7B verbose eval (per-seed + per-turn)")
+        except Exception as e:
+            _log(f"git push failed: {e}")
+
+        per_tier = ", ".join(
+            f"{k}={v.get('f1', 0):.3f}" for k, v in trained_f1.items()
+        )
+        _log(f"DONE in {time.time() - t_start:.0f}s. trained F1: {per_tier}")
         return 0
 
     # Phase 1 — zero-shot baseline. Skipped by default to save ~70 min on the
