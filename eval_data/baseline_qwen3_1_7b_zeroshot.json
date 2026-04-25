@@ -1,0 +1,58 @@
+{
+  "overseer": "qwen3_1_7b_zeroshot",
+  "per_task_confusion": {
+    "action_screen": {
+      "tp": 0,
+      "tn": 61,
+      "fp": 0,
+      "fn": 39
+    },
+    "war_room": {
+      "tp": 0,
+      "tn": 167,
+      "fp": 0,
+      "fn": 133
+    },
+    "drift_ops": {
+      "tp": 0,
+      "tn": 148,
+      "fp": 0,
+      "fn": 102
+    }
+  },
+  "per_task_f1": {
+    "action_screen": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    "war_room": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    "drift_ops": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    }
+  },
+  "per_task_mean_reward": {
+    "action_screen": -4.213,
+    "war_room": -16.5365,
+    "drift_ops": -26.894
+  },
+  "overall_confusion": {
+    "tp": 0,
+    "tn": 376,
+    "fp": 0,
+    "fn": 274
+  },
+  "overall_f1": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0
+  },
+  "n_episodes": 50,
+  "wall_clock_s": 3974.9
+}

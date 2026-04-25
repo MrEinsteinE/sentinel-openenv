@@ -55,7 +55,23 @@
       "f1": 0.9543
     }
   },
-  "baseline_qwen3_1_7b_zeroshot_f1_per_tier": {},
+  "baseline_qwen3_1_7b_zeroshot_f1_per_tier": {
+    "action_screen": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    "war_room": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    "drift_ops": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    }
+  },
   "abort_path": "step200_sft_only",
   "wall_clock_s": 3348.3,
   "best_checkpoint_step": 200,
