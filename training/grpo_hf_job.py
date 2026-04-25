@@ -1037,13 +1037,90 @@ def push_lora_to_hub(adapter_dir: Path) -> str | None:
     return url
 
 
+def _upload_evals_to_hub(rels: list[str]) -> None:
+    """Backup verbose eval JSONs to the HF model repo as a durable fallback.
+
+    The git push can lose data forever if it fails (container is torn down at
+    job exit). Mirroring the verbose JSONs to MODEL_REPO under `eval/` makes
+    them recoverable even when git push fails for any reason (rejected
+    non-fast-forward, network, auth, etc.).
+    """
+    if not os.environ.get("HF_TOKEN"):
+        return
+    try:
+        from huggingface_hub import HfApi
+
+        api = HfApi(token=os.environ["HF_TOKEN"])
+        for rel in rels:
+            local = WORKDIR / rel
+            if not local.exists() or not local.is_file():
+                continue
+            api.upload_file(
+                path_or_fileobj=str(local),
+                path_in_repo=f"eval/{Path(rel).name}",
+                repo_id=MODEL_REPO,
+                repo_type="model",
+                commit_message=f"backup: {Path(rel).name} from HF Job",
+            )
+            _log(f"hub backup: eval/{Path(rel).name} -> {MODEL_REPO}")
+    except Exception as e:
+        _log(f"hub backup failed: {e}")
+
+
+def _git_push_with_rebase(cwd: str, push_url: str, max_attempts: int = 3) -> bool:
+    """Push HEAD to `GIT_BRANCH`. On rejection, fetch + rebase + retry.
+
+    Returns True on success, False if every attempt failed. The body of this
+    function is the safety net for "remote moved while the job was running" —
+    a real failure mode we hit in production when launchers were pushed to
+    `main` during a long eval.
+    """
+    fetch_url = push_url
+    for attempt in range(1, max_attempts + 1):
+        push_proc = subprocess.run(
+            ["git", "-C", cwd, "push", push_url, f"HEAD:{GIT_BRANCH}"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if push_proc.returncode == 0:
+            _log(f"git push -> {GIT_REPO} ({GIT_BRANCH}) [attempt {attempt}]")
+            return True
+
+        stderr = (push_proc.stderr or "") + (push_proc.stdout or "")
+        rejected = "rejected" in stderr.lower() or "fetch first" in stderr.lower() or "non-fast-forward" in stderr.lower()
+        _log(f"git push attempt {attempt} failed (rc={push_proc.returncode}): {stderr.strip()[:400]}")
+        if not rejected or attempt == max_attempts:
+            break
+
+        _log(f"remote moved; rebasing on origin/{GIT_BRANCH} and retrying")
+        subprocess.run(["git", "-C", cwd, "fetch", fetch_url, GIT_BRANCH], check=False)
+        rebase_proc = subprocess.run(
+            ["git", "-C", cwd, "rebase", "FETCH_HEAD"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if rebase_proc.returncode != 0:
+            _log(f"rebase failed: {(rebase_proc.stderr or '').strip()[:400]}")
+            subprocess.run(["git", "-C", cwd, "rebase", "--abort"], check=False)
+            return False
+    return False
+
+
 def git_push_artifacts(commit_message: str) -> None:
     """Add + commit + push whichever artifacts exist on disk.
 
+    Two safety nets layered on top of the bare push:
+      1. `_upload_evals_to_hub` mirrors the verbose eval JSONs to the HF
+         model repo under `eval/` BEFORE git push, so the data survives
+         even when git push fails after commit.
+      2. `_git_push_with_rebase` retries with `git fetch` + `git rebase` on
+         non-fast-forward rejections, which is what bites long-running jobs
+         when launcher fixes get pushed to `main` mid-flight.
+
     Modern git aborts an entire `git add a b c` call if ANY pathspec is
-    missing, so we filter to existing paths first. Phase 1 (zero-shot
-    baseline) is now optional and Phase 6 (trained eval) is best-effort,
-    so several of these may legitimately be absent.
+    missing, so we filter to existing paths first.
     """
     if not os.environ.get("GITHUB_TOKEN"):
         _log("GITHUB_TOKEN not set; skipping git push")
@@ -1072,6 +1149,12 @@ def git_push_artifacts(commit_message: str) -> None:
         _log("no artifact files on disk; skipping git add")
         return
 
+    # Hub backup BEFORE git work so the verbose JSONs are durable even if
+    # git ops fail catastrophically.
+    eval_rels = [r for r in existing if r.startswith("eval_data/") and r.endswith(".json")]
+    if eval_rels:
+        _upload_evals_to_hub(eval_rels)
+
     add_proc = subprocess.run(
         ["git", "-C", cwd, "add", *existing],
         check=False,
@@ -1094,8 +1177,8 @@ def git_push_artifacts(commit_message: str) -> None:
     push_url = GIT_REPO
     if push_url.startswith("https://"):
         push_url = push_url.replace("https://", f"https://x-access-token:{gh}@", 1)
-    subprocess.run(["git", "-C", cwd, "push", push_url, f"HEAD:{GIT_BRANCH}"], check=True)
-    _log(f"git push -> {GIT_REPO} ({GIT_BRANCH})")
+    if not _git_push_with_rebase(cwd, push_url):
+        _log("git push permanently failed after rebase retries; eval JSONs are still safe on Hub")
 
 
 # ============================================================================
