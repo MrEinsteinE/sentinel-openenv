@@ -46,13 +46,13 @@
     },
     "war_room": {
       "precision": 1.0,
-      "recall": 0.9699,
-      "f1": 0.9847
+      "recall": 0.985,
+      "f1": 0.9924
     },
     "drift_ops": {
-      "precision": 0.9895,
-      "recall": 0.9216,
-      "f1": 0.9543
+      "precision": 0.9579,
+      "recall": 0.8922,
+      "f1": 0.9239
     }
   },
   "baseline_qwen3_1_7b_zeroshot_f1_per_tier": {
@@ -77,5 +77,15 @@
   "best_checkpoint_step": 200,
   "model_repo": "Elliot89/sentinel-overseer-qwen3-1.7b",
   "git_repo": "https://github.com/MrEinsteinE/sentinel-openenv",
-  "sentinel_url": "https://elliot89-sentinel.hf.space"
+  "sentinel_url": "https://elliot89-sentinel.hf.space",
+  "trained_overall_f1": {
+    "precision": 0.9849,
+    "recall": 0.9526,
+    "f1": 0.9685
+  },
+  "baseline_qwen3_1_7b_zeroshot_overall_f1": {
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0
+  }
 }
