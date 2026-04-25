@@ -2,14 +2,17 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#   "torch>=2.4,<2.6",
+#   # torch must be >=2.6 because unsloth_zoo==2026.4.4 requires torchao>=0.13
+#   # and torchao>=0.13 references torch.int1 which was added in torch 2.6.
+#   "torch>=2.6,<2.8",
 #   "unsloth==2026.4.4",
 #   "unsloth_zoo==2026.4.4",
 #   "trl==0.21.0",
 #   # transformers must satisfy unsloth==2026.4.4's allowed list. The widest
 #   # sane window unsloth permits is >4.55.1,<4.57.0; we sit inside that.
 #   "transformers>=4.55.2,<4.57.0",
-#   "vllm>=0.6.0,<0.7.0",
+#   # vllm 0.6.x only supports torch<=2.5; bumped to track torch 2.6+.
+#   "vllm>=0.7.0,<0.10.0",
 #   # peft + accelerate upper bounds relaxed so newer transformers can pull
 #   # in their compatible peer versions without a second resolution conflict.
 #   "peft>=0.13.0,<1.0.0",
@@ -165,14 +168,16 @@ def _import_project():
 # ============================================================================
 
 PINS = dict(
+    torch="2.7.0",
     unsloth="2026.4.4",
     unsloth_zoo="2026.4.4",
     trl="0.21.0",
-    transformers="4.46.3",
-    vllm="0.6.6.post1",
-    peft="0.13.2",
-    accelerate="1.1.1",
-    bitsandbytes="0.45.0",
+    transformers="4.56.2",
+    vllm="0.9.2",
+    peft="0.19.1",
+    accelerate="1.13.0",
+    bitsandbytes="0.49.2",
+    torchao="0.17.0",
 )
 
 SFT_CONFIG = dict(

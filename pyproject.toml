@@ -21,13 +21,17 @@ dependencies = [
 # Pin set used by the HF Jobs runner (training/grpo_hf_job.py PEP 723 header).
 # Keep these in sync with the PINS dict in that file.
 train = [
+    # torch must be >=2.6 because unsloth_zoo==2026.4.4 requires torchao>=0.13
+    # and torchao>=0.13 references torch.int1 (added in torch 2.6).
+    "torch>=2.6,<2.8",
     "unsloth==2026.4.4",
     "unsloth_zoo==2026.4.4",
     "trl==0.21.0",
     # transformers must satisfy unsloth==2026.4.4's allowed list.
     # The widest sane window is >4.55.1,<4.57.0; we sit inside that.
     "transformers>=4.55.2,<4.57.0",
-    "vllm>=0.6.0,<0.7.0",
+    # vllm 0.6.x only supports torch<=2.5; bumped to track torch 2.6+.
+    "vllm>=0.7.0,<0.10.0",
     # peft + accelerate upper bounds relaxed to peer with the newer transformers.
     "peft>=0.13.0,<1.0.0",
     "accelerate>=1.1.0,<2.0.0",
