@@ -83,6 +83,7 @@ from pathlib import Path
 from typing import Any
 
 import requests
+from transformers import TrainerCallback
 
 # vLLM 0.9.x v1 engine raises "AoT scheduling is required for full cuda graph"
 # when unsloth_zoo constructs LLM(...) with default cudagraph settings. Falling
@@ -447,9 +448,14 @@ def run_sft(model, tokenizer, epochs: int, output_dir: str):
 # ============================================================================
 
 
-class TrackingCallback:
+class TrackingCallback(TrainerCallback):
     """Captures step / loss / reward, regenerates plots every 25 steps,
-    saves checkpoints, and signals abort via control.should_training_stop."""
+    saves checkpoints, and signals abort via control.should_training_stop.
+
+    MUST inherit from TrainerCallback — transformers>=4.55 dispatches events
+    via getattr(callback, event) with no hasattr fallback, so any event we
+    don't define would raise AttributeError. The base class supplies no-op
+    implementations of on_train_begin / on_init_end / on_save / etc."""
 
     def __init__(
         self,
