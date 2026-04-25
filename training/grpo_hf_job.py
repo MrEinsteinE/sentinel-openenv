@@ -6,10 +6,14 @@
 #   "unsloth==2026.4.4",
 #   "unsloth_zoo==2026.4.4",
 #   "trl==0.21.0",
-#   "transformers>=4.46.0,<4.47.0",
+#   # transformers must satisfy unsloth==2026.4.4's allowed list. The widest
+#   # sane window unsloth permits is >4.55.1,<4.57.0; we sit inside that.
+#   "transformers>=4.55.2,<4.57.0",
 #   "vllm>=0.6.0,<0.7.0",
-#   "peft>=0.13.0,<0.14.0",
-#   "accelerate>=1.1.0,<1.3.0",
+#   # peft + accelerate upper bounds relaxed so newer transformers can pull
+#   # in their compatible peer versions without a second resolution conflict.
+#   "peft>=0.13.0,<1.0.0",
+#   "accelerate>=1.1.0,<2.0.0",
 #   "datasets>=2.18.0",
 #   "bitsandbytes>=0.45.0",
 #   "huggingface_hub>=0.27.0",
