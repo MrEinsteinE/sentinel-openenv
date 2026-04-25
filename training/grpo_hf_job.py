@@ -13,9 +13,12 @@
 #   "transformers>=4.55.2,<4.57.0",
 #   # vllm 0.6.x only supports torch<=2.5; bumped to track torch 2.6+.
 #   "vllm>=0.7.0,<0.10.0",
-#   # peft + accelerate upper bounds relaxed so newer transformers can pull
-#   # in their compatible peer versions without a second resolution conflict.
-#   "peft>=0.13.0,<1.0.0",
+#   # peft must stay <0.19.0 because peft 0.19.x's `_maybe_shard_state_dict_for_tp`
+#   # imports `EmbeddingParallel` from `transformers.integrations.tensor_parallel`,
+#   # which only landed in transformers 4.57+. unsloth==2026.4.4 caps transformers
+#   # at <4.57.0, so peft 0.19.x crashes on `PeftModel.from_pretrained()` with
+#   # `ImportError: cannot import name 'EmbeddingParallel'`. peft 0.18.x is fine.
+#   "peft>=0.13.0,<0.19.0",
 #   "accelerate>=1.1.0,<2.0.0",
 #   "datasets>=2.18.0",
 #   "bitsandbytes>=0.45.0",
@@ -197,7 +200,7 @@ PINS = dict(
     trl="0.21.0",
     transformers="4.56.2",
     vllm="0.9.2",
-    peft="0.19.1",
+    peft="0.18.0",
     accelerate="1.13.0",
     bitsandbytes="0.49.2",
     torchao="0.17.0",
@@ -1203,6 +1206,43 @@ def main() -> int:
         from huggingface_hub import snapshot_download
         from peft import PeftModel
 
+        # Decide whether we also need to re-run zero-shot. The before/after
+        # mining tool requires per-turn data for BOTH zero-shot and trained;
+        # earlier zero-shot runs only saved per-task summaries (no `episodes`
+        # array). Set SENTINEL_SKIP_ZEROSHOT_RERUN=1 to force-skip if the
+        # existing zero-shot JSON is already verbose.
+        zs_path = EVAL_DIR / "baseline_qwen3_1_7b_zeroshot.json"
+        zs_is_verbose = False
+        if zs_path.exists():
+            try:
+                _zs = json.loads(zs_path.read_text())
+                zs_is_verbose = (
+                    isinstance(_zs.get("episodes"), list)
+                    and len(_zs["episodes"]) > 0
+                    and "turns" in _zs["episodes"][0]
+                )
+            except Exception:
+                zs_is_verbose = False
+        skip_zs = os.environ.get("SENTINEL_SKIP_ZEROSHOT_RERUN", "0") == "1"
+
+        baseline_summary: dict[str, Any] | None = None
+        if not zs_is_verbose and not skip_zs:
+            _log(
+                "phase 5b: re-running zero-shot Qwen3-1.7B eval (verbose, per-turn) "
+                f"— existing {zs_path.name} is summary-only"
+            )
+            try:
+                FastLanguageModel.for_inference(model)
+            except Exception as e:
+                _log(f"FastLanguageModel.for_inference unavailable: {e}; using model.eval()")
+                model.eval()
+            baseline_summary = run_local_eval(model, tokenizer, "qwen3_1_7b_zeroshot", project)
+        else:
+            _log(
+                f"phase 5b: zero-shot rerun skipped "
+                f"({'verbose JSON already on disk' if zs_is_verbose else 'SENTINEL_SKIP_ZEROSHOT_RERUN=1'})"
+            )
+
         adapter_local = WORKDIR / "downloaded_adapter"
         if not (adapter_local / "adapter_config.json").exists():
             _log(f"snapshot_download({MODEL_REPO}) -> {adapter_local}")
@@ -1237,6 +1277,9 @@ def main() -> int:
                 existing = {}
         existing["f1_per_tier"] = trained_f1
         existing["trained_overall_f1"] = trained_summary["overall_f1"]
+        if baseline_summary is not None:
+            existing["baseline_qwen3_1_7b_zeroshot_f1_per_tier"] = baseline_summary["per_task_f1"]
+            existing["baseline_qwen3_1_7b_zeroshot_overall_f1"] = baseline_summary["overall_f1"]
         cfg_blk = existing.setdefault("config", {})
         cfg_blk.setdefault("pins", PINS)
         cfg_blk.setdefault("task_filter", TASK_FILTER)
@@ -1245,22 +1288,59 @@ def main() -> int:
 
         try:
             baselines = _load_baselines(EVAL_DIR)
-            baselines["qwen3_1_7b_trained"] = trained_f1
-            zs_f1 = existing.get("baseline_qwen3_1_7b_zeroshot_f1_per_tier") or {}
-            if zs_f1:
-                baselines["qwen3_1_7b_zeroshot"] = zs_f1
+            trained_for_plot = dict(trained_f1)
+            trained_for_plot["overall"] = trained_summary["overall_f1"]
+            baselines["qwen3_1_7b_trained"] = trained_for_plot
+            if baseline_summary is not None:
+                zs_for_plot = dict(baseline_summary["per_task_f1"])
+                zs_for_plot["overall"] = baseline_summary["overall_f1"]
+                baselines["qwen3_1_7b_zeroshot"] = zs_for_plot
+            elif existing.get("baseline_qwen3_1_7b_zeroshot_f1_per_tier"):
+                # Best-effort fallback: macro-mean overall from per-tier F1.
+                zs_per_tier = existing["baseline_qwen3_1_7b_zeroshot_f1_per_tier"]
+                if isinstance(zs_per_tier, dict) and zs_per_tier:
+                    zs_for_plot = dict(zs_per_tier)
+                    f1s = [
+                        v.get("f1", 0.0) for v in zs_per_tier.values()
+                        if isinstance(v, dict)
+                    ]
+                    if f1s:
+                        zs_for_plot["overall"] = {
+                            "f1": sum(f1s) / len(f1s),
+                            "precision": 0.0,
+                            "recall": 0.0,
+                        }
+                    baselines["qwen3_1_7b_zeroshot"] = zs_for_plot
             project["plot_baseline_vs_trained"](
                 baselines,
                 trained_label="qwen3_1_7b_trained",
                 out_path=str(PLOTS_DIR / "baseline_vs_trained.png"),
-                tier=TASK_FILTER,
+                tier="overall",
+                include=[
+                    "naive",
+                    "random",
+                    "qwen3_1_7b_zeroshot",
+                    "qwen2_5_7b",
+                    "llama3_1_8b",
+                    "qwen2_5_72b",
+                    "policy_aware",
+                    "qwen3_1_7b_trained",
+                ],
+                title="Overseer F1 on 50 held-out scenarios",
+                orientation="vertical",
+                dpi=300,
             )
-            _log("re-rendered baseline_vs_trained.png with trained row")
+            _log("re-rendered baseline_vs_trained.png (Overall F1, 300 dpi)")
         except Exception as e:
             _log(f"plot regen failed: {e}")
 
         try:
-            git_push_artifacts("hf-job: trained Qwen3-1.7B verbose eval (per-seed + per-turn)")
+            commit_msg = (
+                "hf-job: trained Qwen3-1.7B verbose eval"
+                + (" (+ zero-shot rerun)" if baseline_summary is not None else "")
+                + " — per-seed + per-turn data"
+            )
+            git_push_artifacts(commit_msg)
         except Exception as e:
             _log(f"git push failed: {e}")
 
@@ -1452,12 +1532,19 @@ def main() -> int:
 
 
 def _load_baselines(eval_dir: Path) -> dict[str, dict[str, dict[str, float]]]:
-    """Load all eval_data/baseline_*.json files into {label: per_task_f1}."""
+    """Load all eval_data/baseline_*.json files into {label: per_task_f1 + 'overall'}.
+
+    The headline plot uses tier='overall' (Overall F1 across all 50 held-out
+    episodes), so we surface `overall_f1` under the synthetic 'overall' key in
+    addition to the per-task keys."""
     out: dict[str, dict[str, dict[str, float]]] = {}
     for p in sorted(eval_dir.glob("baseline_*.json")):
         try:
             data = json.loads(p.read_text())
-            out[p.stem.removeprefix("baseline_")] = data.get("per_task_f1", {})
+            per_task: dict[str, dict[str, float]] = dict(data.get("per_task_f1", {}))
+            if isinstance(data.get("overall_f1"), dict):
+                per_task["overall"] = data["overall_f1"]
+            out[p.stem.removeprefix("baseline_")] = per_task
         except Exception as e:
             _log(f"skip {p.name}: {e}")
     return out
