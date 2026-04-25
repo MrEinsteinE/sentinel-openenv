@@ -714,16 +714,34 @@ class TrackingCallback(TrainerCallback):
         return sum(recent) / max(1, len(recent))
 
     def smoke_pass(self) -> tuple[bool, str]:
+        """Decide whether the warm-started model is producing usable GRPO signal.
+
+        TRL logs the **mean** binary reward across all rollouts in a step
+        (e.g. across `num_generations × per_device_batch_size` completions),
+        NOT per-rollout binaries. So a single log entry of `0.0` means the
+        whole batch was wrong; `0.5` means half right; `1.0` means saturated.
+
+        We pass the smoke gate iff:
+          * has_signal: at least one log entry recorded any non-zero reward
+            (proves the binary grader fired AT LEAST once — model can produce
+            a parseable JSON with a correct decision).
+          * not_saturated: at least one log entry was below 0.999 (proves the
+            policy still has room to improve — GRPO needs reward variance).
+          * step time is well under the 90s budget.
+        """
         if not self.rewards:
             return False, "no rewards logged"
-        has_pos = any(r >= 0.99 for r in self.rewards)
-        has_zero = any(r <= 0.01 for r in self.rewards)
+        nonzero = sum(1 for r in self.rewards if r > 0.001)
+        has_signal = nonzero >= 1
+        not_saturated = any(r < 0.999 for r in self.rewards)
         max_step_t = max(self.step_times) if self.step_times else 0.0
         msg = (
             f"smoke: rewards={self.rewards} "
-            f"has_pos={has_pos} has_zero={has_zero} max_step_s={max_step_t:.1f}"
+            f"nonzero={nonzero}/{len(self.rewards)} "
+            f"saturated={not not_saturated} "
+            f"max_step_s={max_step_t:.1f}"
         )
-        if has_pos and has_zero and max_step_t < 90.0:
+        if has_signal and not_saturated and max_step_t < 90.0:
             return True, msg
         return False, msg
 
@@ -908,21 +926,54 @@ def push_lora_to_hub(adapter_dir: Path) -> str | None:
 
 
 def git_push_artifacts(commit_message: str) -> None:
-    """Add + commit + push training/plots, training/run_summary.json, eval_data/*.json."""
+    """Add + commit + push whichever artifacts exist on disk.
+
+    Modern git aborts an entire `git add a b c` call if ANY pathspec is
+    missing, so we filter to existing paths first. Phase 1 (zero-shot
+    baseline) is now optional and Phase 6 (trained eval) is best-effort,
+    so several of these may legitimately be absent.
+    """
     if not os.environ.get("GITHUB_TOKEN"):
         _log("GITHUB_TOKEN not set; skipping git push")
         return
-    cwd = str(WORKDIR)
-    subprocess.run(
-        ["git", "-C", cwd, "add",
-         "training/plots/", "training/run_summary.json",
-         "eval_data/baseline_qwen3_1_7b_zeroshot.json",
-         "eval_data/trained_qwen3_1_7b.json"],
+    cwd_path = WORKDIR
+    cwd = str(cwd_path)
+
+    candidates = [
+        "training/plots/",
+        "training/run_summary.json",
+        "eval_data/baseline_qwen3_1_7b_zeroshot.json",
+        "eval_data/trained_qwen3_1_7b.json",
+    ]
+    existing: list[str] = []
+    for rel in candidates:
+        p = cwd_path / rel
+        if rel.endswith("/"):
+            # Treat a directory as present iff it has at least one file under it.
+            if p.is_dir() and any(p.rglob("*")):
+                existing.append(rel)
+        elif p.exists():
+            existing.append(rel)
+
+    if not existing:
+        _log("no artifact files on disk; skipping git add")
+        return
+
+    add_proc = subprocess.run(
+        ["git", "-C", cwd, "add", *existing],
         check=False,
+        capture_output=True,
+        text=True,
     )
-    diff = subprocess.run(["git", "-C", cwd, "diff", "--cached", "--quiet"], check=False)
+    if add_proc.returncode != 0:
+        _log(f"git add failed (rc={add_proc.returncode}): {add_proc.stderr.strip()}")
+        return
+
+    diff = subprocess.run(
+        ["git", "-C", cwd, "diff", "--cached", "--quiet"], check=False
+    )
     if diff.returncode == 0:
-        _log("no artifacts to commit")
+        _log("no artifacts to commit (all staged paths unchanged)")
         return
     subprocess.run(["git", "-C", cwd, "commit", "-m", commit_message], check=True)
 
