@@ -1023,6 +1023,61 @@ def main() -> int:
         fast_inference=use_vllm,
     )
 
+    # ZEROSHOT-ONLY short-circuit. When SENTINEL_ZEROSHOT_ONLY=1, we skip
+    # LoRA/SFT/GRPO and run only the zero-shot baseline eval, then merge the
+    # result into the existing training/run_summary.json (so a prior trained
+    # run's f1_per_tier is preserved) and re-render baseline_vs_trained.png.
+    # Used to fill in the missing baseline row in a pitch after a fast
+    # training run that skipped Phase 1 to stay under the 6h budget.
+    if os.environ.get("SENTINEL_ZEROSHOT_ONLY", "0") == "1":
+        _log("ZEROSHOT-ONLY mode: skipping LoRA/SFT/GRPO; running zero-shot eval only")
+        _log("phase 1: zero-shot Qwen3-1.7B baseline eval")
+        baseline_summary = run_local_eval(model, tokenizer, "qwen3_1_7b_zeroshot", project)
+        baseline_f1 = baseline_summary["per_task_f1"]
+
+        summary_path = WORKDIR / "training" / "run_summary.json"
+        summary_path.parent.mkdir(parents=True, exist_ok=True)
+        existing: dict[str, Any] = {}
+        if summary_path.exists():
+            try:
+                existing = json.loads(summary_path.read_text())
+            except Exception:
+                existing = {}
+        existing["baseline_qwen3_1_7b_zeroshot_f1_per_tier"] = baseline_f1
+        cfg_blk = existing.setdefault("config", {})
+        cfg_blk.setdefault("pins", PINS)
+        cfg_blk.setdefault("task_filter", TASK_FILTER)
+        summary_path.write_text(json.dumps(existing, indent=2))
+        _log(f"updated {summary_path} with zero-shot baseline F1")
+
+        try:
+            baselines = _load_baselines(EVAL_DIR)
+            baselines["qwen3_1_7b_zeroshot"] = baseline_f1
+            trained_f1 = existing.get("f1_per_tier") or {}
+            if trained_f1:
+                baselines["trained_qwen3_1_7b_grpo"] = trained_f1
+                project["plot_baseline_vs_trained"](
+                    baselines,
+                    trained_label="trained_qwen3_1_7b_grpo",
+                    output_path=str(PLOTS_DIR / "baseline_vs_trained.png"),
+                )
+                _log("re-rendered baseline_vs_trained.png with zero-shot row")
+            else:
+                _log("no prior trained F1 in run_summary.json; skipping plot regen")
+        except Exception as e:
+            _log(f"plot regen failed: {e}")
+
+        try:
+            git_push_artifacts("hf-job: zero-shot Qwen3-1.7B baseline eval")
+        except Exception as e:
+            _log(f"git push failed: {e}")
+
+        per_tier = ", ".join(
+            f"{k}={v.get('f1', 0):.3f}" for k, v in baseline_f1.items()
+        )
+        _log(f"DONE in {time.time() - t_start:.0f}s. zero-shot F1: {per_tier}")
+        return 0
+
     # Phase 1 — zero-shot baseline. Skipped by default to save ~70 min on the
     # 6h HF Jobs budget (eval uses HF transformers, not vLLM, so 650 sequential
     # generations dominate wall clock). Set SENTINEL_RUN_ZEROSHOT_EVAL=1 to
