@@ -39,9 +39,9 @@
     }
   },
   "per_task_mean_reward": {
-    "action_screen": 5.4935,
-    "war_room": 18.5032,
-    "drift_ops": 29.3403
+    "action_screen": 5.7527,
+    "war_room": 19.2963,
+    "drift_ops": 30.5372
   },
   "overall_confusion": {
     "tp": 276,
@@ -71,11 +71,11 @@
         "recall": 0.0,
         "f1": 0.0
       },
-      "overseer_cumulative_reward": 2.5574,
+      "overseer_cumulative_reward": 2.6006,
       "responder_cumulative_reward": -0.06,
       "drift_events_n": 0,
       "steps": 5,
-      "wall_ms": 0
+      "wall_ms": 2
     },
     {
       "task_id": "action_screen",
@@ -92,7 +92,7 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 7.459,
+      "overseer_cumulative_reward": 7.8094,
       "responder_cumulative_reward": -0.28,
       "drift_events_n": 0,
       "steps": 5,
@@ -113,7 +113,7 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 3.5952,
+      "overseer_cumulative_reward": 3.7872,
       "responder_cumulative_reward": -0.12,
       "drift_events_n": 0,
       "steps": 5,
@@ -134,11 +134,11 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 6.2182,
+      "overseer_cumulative_reward": 6.427,
       "responder_cumulative_reward": -0.18,
       "drift_events_n": 0,
       "steps": 5,
-      "wall_ms": 4
+      "wall_ms": 0
     },
     {
       "task_id": "action_screen",
@@ -155,11 +155,11 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 6.444,
+      "overseer_cumulative_reward": 6.66,
       "responder_cumulative_reward": -0.21,
       "drift_events_n": 0,
       "steps": 5,
-      "wall_ms": 1
+      "wall_ms": 0
     },
     {
       "task_id": "action_screen",
@@ -176,7 +176,7 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 6.459,
+      "overseer_cumulative_reward": 6.6678,
       "responder_cumulative_reward": -0.18,
       "drift_events_n": 0,
       "steps": 5,
@@ -197,11 +197,11 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 7.2494,
+      "overseer_cumulative_reward": 7.601,
       "responder_cumulative_reward": -0.24,
       "drift_events_n": 0,
       "steps": 5,
-      "wall_ms": 2
+      "wall_ms": 3
     },
     {
       "task_id": "action_screen",
@@ -218,7 +218,7 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 3.5538,
+      "overseer_cumulative_reward": 3.7458,
       "responder_cumulative_reward": -0.12,
       "drift_events_n": 0,
       "steps": 5,
@@ -239,7 +239,7 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 8.8478,
+      "overseer_cumulative_reward": 9.0674,
       "responder_cumulative_reward": -0.24,
       "drift_events_n": 0,
       "steps": 5,
@@ -260,11 +260,11 @@
         "recall": 0.0,
         "f1": 0.0
       },
-      "overseer_cumulative_reward": 2.5574,
+      "overseer_cumulative_reward": 2.6006,
       "responder_cumulative_reward": -0.06,
       "drift_events_n": 0,
       "steps": 5,
-      "wall_ms": 1
+      "wall_ms": 0
     },
     {
       "task_id": "action_screen",
@@ -281,11 +281,11 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 10.1168,
+      "overseer_cumulative_reward": 10.478,
       "responder_cumulative_reward": -0.34,
       "drift_events_n": 0,
       "steps": 5,
-      "wall_ms": 0
+      "wall_ms": 2
     },
     {
       "task_id": "action_screen",
@@ -302,7 +302,7 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 6.214,
+      "overseer_cumulative_reward": 6.418,
       "responder_cumulative_reward": -0.14,
       "drift_events_n": 0,
       "steps": 5,
@@ -323,7 +323,7 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 5.791,
+      "overseer_cumulative_reward": 6.2734,
       "responder_cumulative_reward": -0.28,
       "drift_events_n": 0,
       "steps": 5,
@@ -344,7 +344,7 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 5.5892,
+      "overseer_cumulative_reward": 6.086,
       "responder_cumulative_reward": -0.2,
       "drift_events_n": 0,
       "steps": 5,
@@ -365,7 +365,7 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 4.6114,
+      "overseer_cumulative_reward": 4.9594,
       "responder_cumulative_reward": -0.14,
       "drift_events_n": 0,
       "steps": 5,
@@ -386,7 +386,7 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 6.384,
+      "overseer_cumulative_reward": 6.594,
       "responder_cumulative_reward": -0.21,
       "drift_events_n": 0,
       "steps": 5,
@@ -407,11 +407,11 @@
         "recall": 0.0,
         "f1": 0.0
       },
-      "overseer_cumulative_reward": 2.3538,
+      "overseer_cumulative_reward": 2.4042,
       "responder_cumulative_reward": -0.09,
       "drift_events_n": 0,
       "steps": 5,
-      "wall_ms": 4
+      "wall_ms": 0
     },
     {
       "task_id": "action_screen",
@@ -428,11 +428,11 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 5.5628,
+      "overseer_cumulative_reward": 6.0404,
       "responder_cumulative_reward": -0.24,
       "drift_events_n": 0,
       "steps": 5,
-      "wall_ms": 0
+      "wall_ms": 3
     },
     {
       "task_id": "action_screen",
@@ -449,7 +449,7 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 4.7556,
+      "overseer_cumulative_reward": 5.0964,
       "responder_cumulative_reward": -0.18,
       "drift_events_n": 0,
       "steps": 5,
@@ -470,7 +470,7 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 3.5502,
+      "overseer_cumulative_reward": 3.7374,
       "responder_cumulative_reward": -0.08,
       "drift_events_n": 0,
       "steps": 5,
@@ -491,7 +491,7 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 12.5708,
+      "overseer_cumulative_reward": 13.0304,
       "responder_cumulative_reward": 0.07,
       "drift_events_n": 0,
       "steps": 15,
@@ -512,11 +512,11 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 19.0682,
+      "overseer_cumulative_reward": 20.1206,
       "responder_cumulative_reward": -0.34,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 4
+      "wall_ms": 0
     },
     {
       "task_id": "war_room",
@@ -533,7 +533,7 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 18.7084,
+      "overseer_cumulative_reward": 19.6084,
       "responder_cumulative_reward": -0.13,
       "drift_events_n": 0,
       "steps": 15,
@@ -554,11 +554,11 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 15.1926,
+      "overseer_cumulative_reward": 15.669,
       "responder_cumulative_reward": 0.0,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 4
+      "wall_ms": 0
     },
     {
       "task_id": "war_room",
@@ -575,11 +575,11 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 21.2514,
+      "overseer_cumulative_reward": 22.587,
       "responder_cumulative_reward": -0.48,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 1
+      "wall_ms": 0
     },
     {
       "task_id": "war_room",
@@ -596,7 +596,7 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 18.6212,
+      "overseer_cumulative_reward": 19.9544,
       "responder_cumulative_reward": -0.55,
       "drift_events_n": 0,
       "steps": 15,
@@ -617,11 +617,11 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 18.0516,
+      "overseer_cumulative_reward": 18.5244,
       "responder_cumulative_reward": 0.01,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 2
+      "wall_ms": 0
     },
     {
       "task_id": "war_room",
@@ -638,11 +638,11 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 22.1244,
+      "overseer_cumulative_reward": 22.8696,
       "responder_cumulative_reward": -0.3,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 1
+      "wall_ms": 0
     },
     {
       "task_id": "war_room",
@@ -659,11 +659,11 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 23.1008,
+      "overseer_cumulative_reward": 24.2984,
       "responder_cumulative_reward": -0.56,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 0
+      "wall_ms": 12
     },
     {
       "task_id": "war_room",
@@ -680,11 +680,11 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 15.0478,
+      "overseer_cumulative_reward": 15.5158,
       "responder_cumulative_reward": 0.2,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 0
+      "wall_ms": 2
     },
     {
       "task_id": "war_room",
@@ -701,11 +701,11 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 21.0798,
+      "overseer_cumulative_reward": 21.9666,
       "responder_cumulative_reward": -0.18,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 5
+      "wall_ms": 2
     },
     {
       "task_id": "war_room",
@@ -722,11 +722,11 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 19.797,
+      "overseer_cumulative_reward": 20.5494,
       "responder_cumulative_reward": -0.19,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 0
+      "wall_ms": 2
     },
     {
       "task_id": "war_room",
@@ -743,11 +743,11 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 20.204,
+      "overseer_cumulative_reward": 21.3872,
       "responder_cumulative_reward": -0.53,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 5
+      "wall_ms": 2
     },
     {
       "task_id": "war_room",
@@ -764,7 +764,7 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 11.282,
+      "overseer_cumulative_reward": 11.6072,
       "responder_cumulative_reward": 0.22,
       "drift_events_n": 0,
       "steps": 15,
@@ -785,11 +785,11 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 25.28,
+      "overseer_cumulative_reward": 26.0756,
       "responder_cumulative_reward": -0.39,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 4
+      "wall_ms": 0
     },
     {
       "task_id": "war_room",
@@ -806,11 +806,11 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 17.1842,
+      "overseer_cumulative_reward": 17.9246,
       "responder_cumulative_reward": -0.02,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 1
+      "wall_ms": 7
     },
     {
       "task_id": "war_room",
@@ -827,7 +827,7 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 15.1476,
+      "overseer_cumulative_reward": 15.618,
       "responder_cumulative_reward": 0.0,
       "drift_events_n": 0,
       "steps": 15,
@@ -848,11 +848,11 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 18.044,
+      "overseer_cumulative_reward": 18.236,
       "responder_cumulative_reward": 0.22,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 3
+      "wall_ms": 0
     },
     {
       "task_id": "war_room",
@@ -869,11 +869,11 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 20.294,
+      "overseer_cumulative_reward": 21.4496,
       "responder_cumulative_reward": -0.31,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 0
+      "wall_ms": 2
     },
     {
       "task_id": "war_room",
@@ -890,11 +890,11 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 18.0142,
+      "overseer_cumulative_reward": 18.9346,
       "responder_cumulative_reward": -0.17,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 0
+      "wall_ms": 2
     },
     {
       "task_id": "drift_ops",
@@ -911,11 +911,11 @@
         "recall": 1.0,
         "f1": 0.64
       },
-      "overseer_cumulative_reward": 21.0486,
+      "overseer_cumulative_reward": 22.1526,
       "responder_cumulative_reward": -0.21,
       "drift_events_n": 2,
       "steps": 25,
-      "wall_ms": 5
+      "wall_ms": 2
     },
     {
       "task_id": "drift_ops",
@@ -932,11 +932,11 @@
         "recall": 1.0,
         "f1": 0.7692
       },
-      "overseer_cumulative_reward": 24.8882,
+      "overseer_cumulative_reward": 26.3354,
       "responder_cumulative_reward": -0.45,
       "drift_events_n": 2,
       "steps": 25,
-      "wall_ms": 3
+      "wall_ms": 2
     },
     {
       "task_id": "drift_ops",
@@ -953,11 +953,11 @@
         "recall": 1.0,
         "f1": 0.9333
       },
-      "overseer_cumulative_reward": 32.708,
+      "overseer_cumulative_reward": 34.4852,
       "responder_cumulative_reward": -0.87,
       "drift_events_n": 2,
       "steps": 25,
-      "wall_ms": 1
+      "wall_ms": 2
     },
     {
       "task_id": "drift_ops",
@@ -974,11 +974,11 @@
         "recall": 1.0,
         "f1": 0.9375
       },
-      "overseer_cumulative_reward": 38.4484,
+      "overseer_cumulative_reward": 40.0012,
       "responder_cumulative_reward": -0.96,
       "drift_events_n": 2,
       "steps": 25,
-      "wall_ms": 5
+      "wall_ms": 2
     },
     {
       "task_id": "drift_ops",
@@ -995,7 +995,7 @@
         "recall": 1.0,
         "f1": 0.88
       },
-      "overseer_cumulative_reward": 29.2952,
+      "overseer_cumulative_reward": 30.7172,
       "responder_cumulative_reward": -0.58,
       "drift_events_n": 2,
       "steps": 25,
@@ -1016,11 +1016,11 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 26.1784,
+      "overseer_cumulative_reward": 27.1336,
       "responder_cumulative_reward": 0.34,
       "drift_events_n": 0,
       "steps": 25,
-      "wall_ms": 4
+      "wall_ms": 2
     },
     {
       "task_id": "drift_ops",
@@ -1037,11 +1037,11 @@
         "recall": 1.0,
         "f1": 0.8421
       },
-      "overseer_cumulative_reward": 27.4036,
+      "overseer_cumulative_reward": 28.2508,
       "responder_cumulative_reward": -0.19,
       "drift_events_n": 2,
       "steps": 25,
-      "wall_ms": 2
+      "wall_ms": 0
     },
     {
       "task_id": "drift_ops",
@@ -1058,11 +1058,11 @@
         "recall": 1.0,
         "f1": 0.7619
       },
-      "overseer_cumulative_reward": 26.4496,
+      "overseer_cumulative_reward": 27.346,
       "responder_cumulative_reward": -0.23,
       "drift_events_n": 2,
       "steps": 25,
-      "wall_ms": 2
+      "wall_ms": 0
     },
     {
       "task_id": "drift_ops",
@@ -1079,7 +1079,7 @@
         "recall": 1.0,
         "f1": 1.0
       },
-      "overseer_cumulative_reward": 36.9642,
+      "overseer_cumulative_reward": 37.7658,
       "responder_cumulative_reward": -0.47,
       "drift_events_n": 0,
       "steps": 25,
@@ -1100,11 +1100,11 @@
         "recall": 1.0,
         "f1": 0.88
       },
-      "overseer_cumulative_reward": 30.019,
+      "overseer_cumulative_reward": 31.1842,
       "responder_cumulative_reward": -0.62,
       "drift_events_n": 2,
       "steps": 25,
-      "wall_ms": 7
+      "wall_ms": 0
     }
   ]
 }

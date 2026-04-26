@@ -138,15 +138,23 @@ async def reset(request: Request):
 
 @app.post("/step")
 def step(action: Action):
+    import concurrent.futures
     env = _get_env()
     try:
-        obs, reward, done, info = env.step(action)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(env.step, action)
+            try:
+                obs, reward, done, info = future.result(timeout=60)
+            except concurrent.futures.TimeoutError:
+                raise HTTPException(504, "Step timed out after 60s — episode may be stale")
         return {
             "observation": obs.model_dump(),
             "reward": reward.model_dump(),
             "done": done,
             "info": info,
         }
+    except HTTPException:
+        raise
     except RuntimeError as e:
         raise HTTPException(400, str(e))
 
@@ -193,17 +201,28 @@ def tasks():
 
 @app.get("/grader")
 def grader():
-    """Return current Overseer metrics: confusion, F1, cumulative rewards."""
+    """Return current Overseer metrics: confusion, F1, cumulative rewards.
+
+    The top-level `score` field (0-1 normalized F1) is the primary signal
+    for automated OpenEnv evaluators. All other fields are diagnostic.
+    """
     env = _get_env()
     try:
         s = env.state()
         f1 = compute_f1(s.overseer_confusion)
+        f1_val = float(f1.get("f1", 0.0))
         return {
+            # ── Primary field for automated evaluators ──
+            "score": round(f1_val, 4),          # normalized 0-1 (Overseer F1)
+            "score_label": "overseer_f1",
+            "score_range": [0.0, 1.0],
+            # ── Episode metadata ──
             "episode_id": s.episode_id,
             "task_id": s.task_id,
             "scenario_id": s.scenario_id,
             "step_count": s.step_count,
             "done": s.done,
+            # ── Detailed metrics ──
             "overseer_confusion": s.overseer_confusion,
             "overseer_metrics": f1,
             "responder_cumulative_reward": s.cumulative_responder_reward,

@@ -3,7 +3,12 @@ __pycache__/
 *.pyo
 *.egg-info/
 .venv/
+env/
 .env
+
+# Local-only artifacts — not for the submission repo
+backups/
+.embed.html
 .idea/
 .vscode/
 *.log

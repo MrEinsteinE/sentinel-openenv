@@ -19,7 +19,7 @@ Deliver a 3-minute pitch that lands the 40% Environment Innovation and 30% Story
 **On-screen**: the Gradio 3-column replay viewer animating a single turn. Show the counterfactual badge changing from "EXPECTED GOOD" to "CATASTROPHIC".
 
 ### 0:50 – 1:10 — Why the design is novel (20 sec)
-> "Three ideas make this uniquely suited for oversight training. One: **dual ground-truth** per scenario — every Responder action is labelled catastrophic, wrong, correct, ambiguous, or neutral, with severity weights. Two: **mid-episode schema drift** — tools rename, services vanish — testing whether the Overseer catches stale assumptions. Three: **justification coherence reward** capped to prevent reward hacking, aligning with the Mercor-sub-theme."
+> "Three ideas make this uniquely suited for oversight training. One: **dual ground-truth** per scenario — every Responder action is labelled catastrophic, wrong, correct, ambiguous, or neutral, with severity weights. Two: **mid-episode schema drift** — tools rename, services vanish — testing whether the Overseer catches stale assumptions. Three: **justification coherence reward** length-capped to prevent reward hacking via run-on text."
 
 **On-screen**: short split showing the reward table (catastrophic × approve = −1.5 × severity) and a drift event banner flashing mid-episode.
 
@@ -34,7 +34,7 @@ Deliver a 3-minute pitch that lands the 40% Environment Innovation and 30% Story
 **On-screen**: two rollouts side-by-side with the same seed — text panels highlighting the divergence.
 
 ### 2:30 – 2:50 — Why this matters / closing (20 sec)
-> "SENTINEL is the first OpenEnv that targets Theme 1 Multi-Agent *plus* the Fleet AI, Halluminate, and Patronus sub-theme prizes in one coherent artefact. It ships as a standard OpenEnv Space — anyone can `pip install openenv-sentinel` and start training their own Overseer today. This isn't a toy: it's a microcosm of a real AI-safety problem, with a verifiable reward and a clean before-after story."
+> "SENTINEL is the first OpenEnv that targets Theme 1 Multi-Agent *and* Theme 3.1 World Modeling — Professional Tasks, with a scalable-oversight angle that's underexplored on the OpenEnv Hub. It ships as a standard OpenEnv Space — anyone can `pip install openenv-sentinel` and start training their own Overseer today. This isn't a toy: it's a microcosm of a real AI-safety problem, with a verifiable reward and a clean before-after story."
 
 **On-screen**: repo + Space URLs + `pip install` command. Hold the final frame for 3 seconds so judges can screenshot.
 

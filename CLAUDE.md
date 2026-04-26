@@ -5,11 +5,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Running the server
 
 ```bash
-# Install (dev)
+# Install (dev — inference only)
 pip install -e .
+
+# Install with training stack (GPU required: Unsloth, TRL, vLLM)
+pip install -e ".[train]"
 
 # Start locally (all commands run from repo root)
 uvicorn server.app:app --host 0.0.0.0 --port 7860 --reload
+
+# Docker (production / on-site GPU box)
+docker build -t sentinel-env .
+docker run -p 7860:7860 sentinel-env
 
 # Deploy to HF Space (never use bare `openenv push` — it injects base_path: /web which breaks the embed)
 bash scripts/deploy_hf.sh
@@ -25,6 +32,9 @@ python eval.py --overseer policy_aware
 python eval.py --overseer random
 python eval.py --overseer llm --model <model-id> --base-url <openai-compat-url>
 
+# Fetch grader metrics after a manual run (episode_id required if concurrent sessions)
+# GET http://localhost:7860/grader  → {"f1": ..., "precision": ..., "recall": ..., "confusion": {...}}
+
 # Generate the Stage-B RFT dataset (uses training seeds 1-8000, never eval)
 python scripts/generate_rft_dataset.py --n-seeds 400 --out eval_data/rft_dataset.jsonl
 
@@ -36,10 +46,27 @@ export SENTINEL_URL=http://localhost:7860
 export MODEL_NAME=unsloth/Qwen3-1.7B
 python training/grpo_smoke.py
 
-# Full training (Colab / on-site)
-# Open training/grpo_colab.ipynb — run cells top to bottom.
-# Uncomment Cell 3b to start SENTINEL locally instead of hitting the remote Space.
+# Full training — pick the entry point for your environment:
+#   • Colab L4/A100              → open training/grpo_colab.ipynb, run top-to-bottom
+#   • Local 8GB box (RTX 3070Ti) → open training/grpo_local_rtx3070ti.ipynb
+#   • HF Jobs runner (preferred) → bash scripts/launch_hf_job.sh   # Linux/macOS/Git Bash
+#                                  ./scripts/launch_hf_job.ps1     # Windows PowerShell
+#   • SFT warmup only            → python training/sft_warmup.py
+#   • Trained-checkpoint eval    → bash scripts/launch_trained_eval.sh
+#                                  ./scripts/launch_trained_eval.ps1
+#   • Zero-shot baseline sweep   → bash scripts/launch_zeroshot_eval.sh
+#                                  ./scripts/launch_zeroshot_eval.ps1
 ```
+
+The HF Jobs path (`scripts/launch_hf_job.sh` / `.ps1`) wraps `hf jobs uv run` and ships environment variables (`SENTINEL_URL`, `MODEL_REPO`, `STEP100_MIN_REWARD`, `STEP200_MIN_REWARD`, etc.) into the runner defined by `training/grpo_hf_job.py`. The script defaults to `FLAVOR=l4x1`, `TIMEOUT=6h`. Override with `FLAVOR=a100-large bash scripts/launch_hf_job.sh`. **Prereq:** `hf auth login` (token must have `job.write`) and `export GITHUB_TOKEN=ghp_…` (PAT with `contents:write` on `MrEinsteinE/sentinel-openenv`).
+
+**Environment variables used by training scripts:**
+
+| Variable | Where used | Value |
+|---|---|---|
+| `SENTINEL_URL` | `grpo_smoke.py`, notebook Cell 3b | `http://localhost:7860` |
+| `MODEL_NAME` | `grpo_smoke.py`, notebook Cell 5 | `unsloth/Qwen3-1.7B` |
+| `HF_TOKEN` | notebook (model download + push) | HuggingFace write token |
 
 **Eval seed isolation:** training seeds live in `[1, 8000]`; held-out eval seeds live in `[9001, 9210]` (defined as `EVAL_SEEDS_BY_TASK` in `scenarios.py`). Never use eval seeds for training data generation.
 
@@ -62,7 +89,7 @@ TRL GRPOTrainer
 
 Three reset modes select who controls which agent:
 - `alternating` — caller drives both (used by Gradio viewer, eval harness, `before_after_demo.py`)
-- `train_overseer` — env auto-plays Responder via heuristic; every `step()` is one Overseer decision (used by training)
+- `train_overseer` — env auto-plays Responder via heuristic; every `step()` is one Overseer decision (used by training). Auto-play distribution: 15% catastrophic, 20% wrong, 15% ambiguous, 50% correct — ensures balanced training signal.
 - `train_responder` — env auto-approves everything; every `step()` is one Responder action
 
 **Session concurrency:** All per-episode state lives in `SentinelEnvironment._sessions[episode_id]` with per-session locks. `SUPPORTS_CONCURRENT_SESSIONS = True` is intentional — TRL GRPO runs many parallel rollouts against the same server instance.
@@ -79,6 +106,12 @@ Three reset modes select who controls which agent:
 | `server/app.py` | FastAPI endpoints + Gradio 3-column replay viewer |
 | `client.py` | `SentinelEnv(EnvClient)` — typed HTTP client for use in training scripts |
 | `eval.py` | Baseline harness — `random`, `naive`, `policy_aware`, `llm` overseers |
+| `training/grpo_hf_job.py` | HF Jobs entry point with PEP 723 inline deps; pinned to PyTorch 2.6+/Unsloth 2026.4.4/TRL 0.21. Owns the auto-abort logic (`STEP100_MIN_REWARD`, `STEP200_MIN_REWARD`) that falls back to the SFT-only checkpoint if GRPO underperforms. |
+| `training/sft_warmup.py` | Stage B: SFT on `eval_data/rft_dataset.jsonl` (321 balanced samples mined from the policy-aware heuristic). This is the load-bearing stage — the GRPO auto-abort means the published checkpoint is typically the SFT model. |
+| `training/grpo_colab.ipynb` | Colab L4/A100 path — full Stage A → B → C notebook. |
+| `training/grpo_local_rtx3070ti.ipynb` | 8GB-VRAM variant (smaller batch, shorter ctx) for local-only iteration. |
+| `training/eval_trained.py` | Loads the published adapter and re-runs the held-out 50-scenario eval — produces `f1_per_tier` for `run_summary.json`. |
+| `scripts/launch_*.sh / .ps1` | Thin shell wrappers that validate `hf auth whoami`, check namespace alignment, then `exec hf jobs uv run` into the runner above. PowerShell variants exist because Git Bash on Windows drops venv PATH entries that contain spaces (this repo path does). |
 
 ## Reward model
 
@@ -108,7 +141,7 @@ Justification scoring is length-capped (saturates at 20 words) and requires grou
 
 **Stage B — Rejection Fine-Tuning** (`Elliot89/sentinel-rft-v1`, 321 samples): SFT on curated TP/TN trajectories from the policy-aware heuristic. Teaches JSON format + evidence-grounded justifications.
 
-**Stage C — Curriculum GRPO** (250 steps, all 3 tiers): full GRPO across task tiers with uniform task sampling.
+**Stage C — Curriculum GRPO** (up to 400 steps, all 3 tiers): full GRPO across task tiers with uniform task sampling. **Has auto-abort:** if mean binary reward at step 100 < `STEP100_MIN_REWARD` or step 200 < `STEP200_MIN_REWARD`, the runner publishes the Stage B checkpoint instead. The current published checkpoint (`Elliot89/sentinel-overseer-qwen3-1.7b`, F1=0.980) hit `abort_path = "step200_sft_only"` — i.e. GRPO ran 200 steps but did not exceed the SFT baseline by the configured margin, so the SFT model was kept. Treat the published F1 as an SFT-headline number, not a GRPO win, until a future GRPO run survives the abort.
 
 ## Deployment notes
 

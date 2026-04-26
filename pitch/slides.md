@@ -268,18 +268,14 @@ This gap is why we built SENTINEL — oversight policies that **generalize** pas
 
 ---
 
-## Theme coverage — four sub-theme prize lanes
+## Theme coverage
 
-| Theme / Sub-theme | Coverage |
+| Theme | Coverage |
 |---|---|
-| **Core · Theme 1** — Multi-Agent Interactions | Responder + Overseer + optional Adversary |
-| **Fleet AI** — Scalable Oversight | ✅ Literal match — env trains overseer agents to monitor, analyze, explain |
-| **Halluminate** — Multi-Actor Environments | ✅ Overseer arbitrates between specialist Responders |
-| **Patronus AI** — Schema Drift | ✅ Mid-episode tool-API mutations |
-| **Theme 4** — Self-Improvement | ✅ Co-trained curriculum Overseer ↔ Responder |
-| **Mercor** — Token-scaling reward | ✅ Justification coherence bonus (capped) |
+| **Theme 1 — Multi-Agent Interactions** | Responder + Overseer turn-based loop; partial observability; planned Adversary tier |
+| **Theme 3.1 — World Modeling: Professional Tasks** | Cloud-ops simulation with stateful services, runbook tools, and cascading failures — the env requires real diagnostic work, not shortcuts |
 
-**Four sub-theme bonus prizes** hit by one coherent artefact.
+A genuinely fresh angle on the official themes: **scalable oversight** via an env-trained AI supervisor — an axis no other public OpenEnv targets.
 
 ---
 
