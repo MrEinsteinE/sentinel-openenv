@@ -18,8 +18,8 @@ set -euo pipefail
 REPO_ID="${REPO_ID:-Elliot89/sentinel}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo "[deploy] openenv push --repo-id $REPO_ID"
-PYTHONUTF8=1 openenv push --repo-id "$REPO_ID"
+echo "[deploy] openenv push --repo-id $REPO_ID (excludes from .gitignore — openenv ignores it by default)"
+PYTHONUTF8=1 openenv push --repo-id "$REPO_ID" --exclude .gitignore
 
 echo "[deploy] running post-push cleanup (frontmatter + bloat)..."
 PYTHONUTF8=1 REPO_ID="$REPO_ID" python "$SCRIPT_DIR/hf_post_push_cleanup.py" --repo-id "$REPO_ID"
