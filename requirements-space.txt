@@ -1,0 +1,5 @@
+# HF Space: PEFT inference for /live/oversee trained backend (after requirements.txt).
+# torch (CPU) is installed in Dockerfile with --index-url (see Dockerfile).
+transformers>=4.55.2,<4.57.0
+peft>=0.13.0,<0.20.0
+accelerate>=1.1.0,<2.0.0

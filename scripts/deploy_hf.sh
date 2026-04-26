@@ -9,7 +9,8 @@
 #      Space repo by ~130 MB and polluting the file tree the judges browse.
 #
 # This wrapper runs `openenv push` and then post-processes the remote Space
-# via scripts/hf_post_push_cleanup.py (frontmatter strip + bloat folder delete).
+# via scripts/hf_post_push_cleanup.py (frontmatter strip, bloat delete, judge
+# clutter strip — see script docstring).
 # The cleanup lives in a standalone .py file so heredoc parsing differences
 # between bash, dash, and Git Bash on Windows don't break the deploy.
 set -euo pipefail

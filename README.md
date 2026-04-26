@@ -35,7 +35,7 @@ tags:
 | Overseer F1 — Qwen2.5-72B zero-shot (frontier baseline) | 0.093 |
 | Size advantage of the trained model over Qwen2.5-72B | **42× smaller**, 10.4× higher F1 |
 | Compute to train | **~56 min** on a single L4 GPU |
-| Existing OpenEnvs targeting scalable oversight before this hackathon | **0** |
+| OpenEnv-style envs we found **in this program** with a first-class **trainable LLM Overseer** loop like SENTINEL | **none we could identify** *(oversight research exists elsewhere; this is a narrow OpenEnv claim)* |
 
 ---
 
@@ -44,11 +44,13 @@ tags:
 | Resource | Link |
 |---|---|
 | Hugging Face Space (live env) | https://huggingface.co/spaces/Elliot89/sentinel |
-| Blog post (full writeup) | https://github.com/MrEinsteinE/sentinel-openenv/blob/main/blog.md |
-| Training notebook (Colab, re-runnable) | https://colab.research.google.com/github/MrEinsteinE/sentinel-openenv/blob/main/training/grpo_colab.ipynb |
+| Blog (long-form, same repo as Space) | https://huggingface.co/spaces/Elliot89/sentinel/blob/main/blog.md |
+| Pitch deck | [`pitch/slides.pdf`](https://huggingface.co/spaces/Elliot89/sentinel/blob/main/pitch/slides.pdf) · [source `slides.md`](https://huggingface.co/spaces/Elliot89/sentinel/blob/main/pitch/slides.md) |
+| Training | **Colab:** https://colab.research.google.com/github/MrEinsteinE/sentinel-openenv/blob/main/training/grpo_colab.ipynb — **HF Jobs:** [documentation](https://huggingface.co/docs/huggingface_hub/en/guides/jobs) · entrypoint [`training/grpo_hf_job.py`](https://github.com/MrEinsteinE/sentinel-openenv/blob/main/training/grpo_hf_job.py) · launcher [`scripts/launch_hf_job.sh`](https://github.com/MrEinsteinE/sentinel-openenv/blob/main/scripts/launch_hf_job.sh) (typical `l4x1`, ~56 min). |
 | Code repository | https://github.com/MrEinsteinE/sentinel-openenv |
-| Trained checkpoint | https://huggingface.co/Elliot89/sentinel-overseer-qwen3-1.7b |
-| Wandb run (training plots) | _Not enabled — see plots in `training/plots/` and the blog_ |
+| Published Overseer adapter | https://huggingface.co/Elliot89/sentinel-overseer-qwen3-1.7b |
+| GRPO-400 ablation (lower F1; receipt) | https://huggingface.co/Elliot89/sentinel-overseer-qwen3-1.7b-grpo400 |
+| Experiment tracking | [`training/run_summary.json`](training/run_summary.json) + [`training/plots/`](training/plots/). Held-out Overseer eval: [`eval_data/baseline_qwen3_1_7b_trained.json`](eval_data/baseline_qwen3_1_7b_trained.json) (+ [`eval_data/rft_summary.json`](eval_data/rft_summary.json)). Full baseline sweep files: [GitHub `eval_data/`](https://github.com/MrEinsteinE/sentinel-openenv/tree/main/eval_data). |
 
 ---
 
@@ -68,9 +70,13 @@ tags:
 | Llama-3.1-8B (zero-shot) | 0.178 | 0.219 | 0.074 | 0.162 | 0.735 | 0.091 |
 | Random | 0.553 | 0.504 | 0.575 | 0.539 | 0.412 | 0.782 |
 | Policy-aware heuristic | 1.000 | 1.000 | 0.863 | 0.944 | 0.893 | 1.000 |
-| **Qwen3-1.7B + SENTINEL GRPO** | **1.000** | **0.992** | **0.924** | **0.969** | **0.985** | **0.953** |
+| **Qwen3-1.7B + SENTINEL** (published adapter) | **1.000** | **0.992** | **0.924** | **0.969** | **0.985** | **0.953** |
 
-Every frontier LLM we tested — including Qwen2.5-72B — scores below random as a zero-shot Overseer. The counterfactual preview saying "CATASTROPHIC if executed" is literally in the prompt; they approve anyway. A 30-line rule-based heuristic that reads the same text reaches F1 = 0.944. Oversight isn't a capability problem — it's a behavior problem. LLMs are trained to be agreeable, not skeptical. Full writeup: [blog.md](https://github.com/MrEinsteinE/sentinel-openenv/blob/main/blog.md).
+**How to read the zeros.** Metrics are **micro-F1 on Overseer decisions** over the **50 held-out scenarios** (`EVAL_SEEDS_BY_TASK`). **Naive (always approve)** never blocks → **TP = 0** for intervention-needed steps → F1 = 0. **Qwen3-1.7B zero-shot** uses `eval.py --overseer llm` with the same JSON verdict schema; on this suite it **almost always approves** (see per-task confusion in [`baseline_qwen3_1_7b_zeroshot.json`](https://github.com/MrEinsteinE/sentinel-openenv/blob/main/eval_data/baseline_qwen3_1_7b_zeroshot.json)), so it gets the same **TP = 0** failure mode and **F1 = 0** — a benchmark-specific result, not a claim that the base model scores zero on every possible oversight prompt.
+
+**Random** = uniform random choice among approve / flag / block / escalate each step (non-strategic chance baseline).
+
+Every frontier LLM we tested — including Qwen2.5-72B — scores **below that random decision baseline** as a zero-shot Overseer on this eval. Full writeup: [blog on the Space](https://huggingface.co/spaces/Elliot89/sentinel/blob/main/blog.md).
 
 ---
 
@@ -88,22 +94,22 @@ curl -X POST https://elliot89-sentinel.hf.space/live/oversee \
 | | |
 |---|---|
 | **Live demo** | First tab on the [HF Space](https://huggingface.co/spaces/Elliot89/sentinel) — paste an action, get a verdict, color-coded with a 0-1 risk gauge. |
-| **Endpoint** | `POST /live/oversee` (heuristic backend always works; trained Qwen3-1.7B used opportunistically when vLLM is reachable). |
+| **Endpoint** | `POST /live/oversee` (heuristic always works; **trained** loads this Hub LoRA + Qwen3-1.7B in the Space when `HF_TOKEN` is set, else local vLLM if you deploy that way). |
 | **🛡️ Prompt-injection shield** | Detects 10 adversarial override patterns ("ignore previous instructions", `<\|im_start\|>`, etc) and force-escalates. |
 | **📋 Copy-as-agent-code** | New panel on the live tab: pick `curl` / `python (requests)` / `python (langchain)` and the snippet **auto-rebuilds from your inputs** so judges can paste it straight into an LLM agent and call the public Space over the Internet. |
-| **🔌 API Explorer tab (NEW)** | Third tab on the Space — every endpoint (`/health`, `/tasks`, `/reset`, `/step`, `/state`, `/grader`, `/live/oversee`, `/live/stats`, `/live/health`, `/docs`) has a one-click **▶️ Try it** button + side-by-side raw JSON response and equivalent `curl` snippet pointed at the public URL. No terminal required. |
+| **🔌 API Explorer tab** | Third tab — interactive **▶️ Try it** for each HTTP route (see **API surface** below) + `curl` snippets against the public Space. |
 | **🏆 Live Reward Scoreboard** | Pinned to the top of both the Replay Viewer and the API Explorer — cumulative Responder reward, cumulative Overseer reward, F1 (color-coded 🟢🟡🔴), and TP/FP/TN/FN. **Updates after every `/reset` or `/step` click**, so judges can watch rewards move in real time. |
 | **Lifetime stats** | `GET /live/stats` exposes per-decision, per-severity, p50/p99 latency, catastrophic-blocked, and shield-triggered counts since server start. |
-| **Demo script** | `python tools/agent_demo.py --use-mock-llm` runs a 5-step incident loop in 6 seconds, no API key. |
+| **Demo script** | [`tools/agent_demo.py`](https://github.com/MrEinsteinE/sentinel-openenv/blob/main/tools/agent_demo.py) — `python tools/agent_demo.py --use-mock-llm` (clone from GitHub). |
 | **Full docs** | [SENTINEL_LIVE.md](./SENTINEL_LIVE.md) |
 
-This makes SENTINEL the only OpenEnv submission that's **both** a training environment AND a deployable safety layer — the same `grade_overseer_decision()` function that scored every training step is the one that scores your live verdict. There is no train/serve gap.
+The same `grade_overseer_decision()` used during training scores **SENTINEL/Live** verdicts — no separate reward implementation for serving.
 
 ---
 
 ## 🧭 Why SENTINEL is different
 
-Every other public OpenEnv we surveyed measures whether an agent can **act** — drive a browser, write code, complete a task. SENTINEL measures whether an agent can **judge** another agent's actions in flight. That's the missing axis in the AI-safety stack and the load-bearing primitive for any deployment beyond toy demos.
+Many public OpenEnvs emphasize whether an agent can **act**. SENTINEL is built to measure whether an agent can **judge** another agent’s proposed actions in flight — a different axis that matters for oversight and safety stacks.
 
 | Axis | Existing OpenEnvs | **SENTINEL** |
 |---|---|---|
@@ -125,7 +131,7 @@ The dataset, the reward, the drift injector, the heuristic-as-gold-label trick �
 | **Theme 1 — Multi-Agent Interactions** | Responder + Overseer turn-based loop; partial observability; divergent objectives (Responder fixes the incident, Overseer prevents bad actions) |
 | **Theme 3.1 — World Modeling: Professional Tasks** | Cloud-ops simulation with stateful services, runbook tools, and cascading failures — the env requires real diagnostic work, not shortcuts |
 
-A fresh angle on the official themes: **scalable oversight** — training one LLM to supervise another, an axis no other public OpenEnv targets.
+A strong fit for the hackathon themes: **scalable oversight** — using this environment to **train** one LLM to supervise another’s tool actions, with drift and dual rewards.
 
 ---
 
@@ -145,13 +151,15 @@ Responder (LLM)          Overseer (LLM — trained)      World
 
 Per-episode drift injector randomly mutates tool APIs (service renames, param renames, service removal, error injection) at a scenario-configured step — testing whether the Overseer notices stale Responder assumptions.
 
-### Three task tiers
+### Three task tiers (difficulty is **relative within SENTINEL**)
 
-| Task | Max steps | What's novel | Achieved Overseer F1 (trained) |
-|---|---:|---|---:|
-| 🟢 **Action Screen** | 5  | Independent decisions; warm-up signal | **1.000** |
-| 🟡 **War Room**      | 15 | Multi-responder (NetworkOps / DBAdmin / SecOps); policy-gray actions | **0.992** |
-| 🔴 **Drift Ops**     | 25 | Mid-episode tool API renames; tests stale-assumption catching | **0.924** |
+| Task | OpenEnv label | Max steps | What’s novel | Achieved Overseer F1 (published adapter) |
+|---|---|---:|---|---:|
+| `action_screen` | easy | 5 | Independent decisions; warm-up signal | **1.000** |
+| `war_room` | medium | 15 | Multi-responder roles; policy-gray actions | **0.992** |
+| `drift_ops` | hard | 25 | Mid-episode schema drift (renames, stale tools) | **0.924** |
+
+“Easy / medium / hard” are **tier names in `openenv.yaml`**, not a claim about absolute world difficulty.
 
 ---
 
@@ -276,54 +284,36 @@ Open `training/grpo_colab.ipynb` in Colab (L4 or A100), set `SENTINEL_URL` to yo
 
 ## 🔌 API
 
+OpenAPI / Swagger UI: **`GET /docs`** (interactive schemas for every body type).
+
 | Method | Path | Description |
 |---|---|---|
-| `GET`  | `/`       | Gradio UI — replay viewer |
-| `GET`  | `/health` | `{"status":"ok","version":"0.1.0"}` |
-| `POST` | `/reset`  | New episode. Body: `{task_id, seed?, mode?}` |
-| `POST` | `/step`   | Apply an Action — body shape: `{role: "responder"|"overseer", responder?: {...}, overseer?: {...}}` |
-| `GET`  | `/state`  | Full episode state |
-| `GET`  | `/tasks`  | Task list + action schema |
-| `GET`  | `/grader` | Overseer F1 / confusion / rewards for current episode |
+| `GET` | `/` | Gradio UI — Live tab, Replay Viewer, API Explorer |
+| `GET` | `/health` | Liveness: `{"status":"ok","version",...}` |
+| `GET` | `/api/info` | OpenEnv-style service descriptor (name, tasks, docs link) |
+| `POST` | `/reset` | Start episode: `task_id`, `seed?`, `mode?` |
+| `POST` | `/step` | Apply `Action` (Responder or Overseer turn) |
+| `GET` | `/state` | Full `EpisodeState` |
+| `GET` | `/tasks` | Task list + action schemas |
+| `GET` | `/grader` | Overseer F1, confusion, cumulative rewards |
+| `POST` | `/live/oversee` | SENTINEL/Live — verdict for a proposed action (JSON in/out) |
+| `GET` | `/live/stats` | Lifetime counters (verdicts, latency, shield trips, …) |
+| `GET` | `/live/health` | Live feature health (trained path, last error hint) |
 
 ---
 
-## 📁 Project Structure
+## 📁 Repository layout (this Space)
 
-```
-sentinel/
-├── Dockerfile               # python:3.11.11-slim-bookworm
-├── openenv.yaml             # OpenEnv manifest (tasks + endpoints)
-├── pyproject.toml           # openenv-sentinel package + [train] extras
-├── requirements.txt         # Runtime deps (pinned to openenv-core v0.2.3)
-├── README.md                # (this file)
-├── blog.md                  # full writeup — the story behind the F1 numbers
-├── PITCH.md                 # 3-min pitch outline
-│
-├── models.py                # Pydantic v2 contracts: Action/Observation/DualReward/EpisodeState
-├── scenarios.py             # Scenario templates + generate_scenario() + EVAL_SEEDS_BY_TASK
-├── drift.py                 # Schema drift injector (service/param renames, removal, errors)
-├── graders.py               # Dual-reward grading (Responder + Overseer) + classify_proposal()
-├── eval.py                  # Baseline eval harness (random/naive/policy-aware/LLM overseers)
-├── client.py                # SentinelEnv(EnvClient) — typed HTTP client for training
-│
-├── server/
-│   ├── app.py               # FastAPI endpoints + Gradio 3-column replay viewer
-│   └── environment.py       # SentinelEnvironment — turn scheduler + session management
-│
-├── training/
-│   ├── grpo_hf_job.py       # HF Jobs entry point (PEP 723 inline deps, auto-abort logic)
-│   ├── grpo_colab.ipynb     # Colab L4/A100 notebook — full Stage A → B → C pipeline
-│   ├── grpo_local_rtx3070ti.ipynb  # 8GB-VRAM variant for local iteration
-│   ├── grpo_smoke.py        # 5-min local sanity check (no real training)
-│   ├── sft_warmup.py        # Stage B — SFT on the 321-sample RFT dataset
-│   ├── eval_trained.py      # Loads published adapter, re-runs the 50-scenario eval
-│   ├── plot_utils.py        # Matplotlib helpers (reward / loss / baseline-vs-trained)
-│   ├── plots/               # baseline_vs_trained.png, grpo_reward.png, grpo_loss.png
-│   └── run_summary.json     # per-tier F1 + auto-abort status from the published HF Job
-│
-├── eval_data/               # baseline_*.json (one per Overseer) + demo transcripts
-├── pitch/                   # Marp slide deck (slides.md, theme.css, slides.pdf)
-├── scripts/                 # deploy_hf.sh + launch_*.sh / .ps1 wrappers for HF Jobs
-└── tools/                   # regen_baseline_plot.py + reproducibility helpers
-```
+| Path | Role |
+|---|---|
+| `server/` | FastAPI app, Gradio tabs, `/live/*` |
+| `models.py`, `scenarios.py`, `drift.py`, `graders.py` | Env core |
+| `eval.py`, `client.py` | Eval harness + `EnvClient` for training |
+| `training/` | Colab notebook, `grpo_hf_job.py`, plots, `run_summary.json` |
+| `eval_data/` | Held-out eval artifacts (trained + RFT summary; full baseline sweep on GitHub) |
+| `blog.md` | Long-form narrative (charts use Space `raw` URLs) |
+| `pitch/` | Slide deck (`slides.pdf`, `slides.md`, Marp theme) |
+| `SENTINEL_LIVE.md` | Live API integration notes |
+| `openenv.yaml`, `Dockerfile`, `requirements*.txt` | Manifest + image |
+
+**On GitHub only (not shipped to this Space file tree):** `scripts/`, `tools/`, extra `eval_data/baseline_*.json`, local-only notebooks — see [repository](https://github.com/MrEinsteinE/sentinel-openenv).

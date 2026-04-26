@@ -12,8 +12,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       git curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir --timeout=180 -r requirements.txt
+COPY requirements.txt requirements-space.txt .
+RUN pip install --no-cache-dir --timeout=180 -r requirements.txt \
+    && pip install --no-cache-dir --timeout=300 \
+        torch --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --no-cache-dir --timeout=300 -r requirements-space.txt
 
 COPY . .
 

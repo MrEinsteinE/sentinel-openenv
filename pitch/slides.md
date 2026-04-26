@@ -189,21 +189,23 @@ RL training in SENTINEL specifically targets that behaviour — **that's the win
 
 ---
 
-## Training pipeline — 3 stages
+## Training pipeline — 3 stages + auto-abort
 
 ```
 Stage A  Warmup GRPO (action_screen only)        ~30 steps     ~45 min
-         Seeds the policy with 4-tool action space + JSON format
-
-Stage B  Rejection Fine-Tuning (SFT)             2 epochs      ~30 min
-         321 curated TP/TN samples from policy-aware heuristic
-         → teaches evidence-grounded justifications
-
-Stage C  Curriculum GRPO (all 3 tasks)           ~250 steps    ~6-8 h
-         Full ramp with schema drift on the hard tier
+Stage B  Rejection Fine-Tuning (SFT)             1-3 epochs    ~30 min
+         321 curated TP/TN samples → evidence-grounded justifications
+Stage C  Curriculum GRPO (all 3 tasks)           up to 400 steps
+         Auto-abort at step 100 / 200 if reward stalls
 ```
 
-Stack: **Qwen3-1.7B + Unsloth QLoRA + TRL GRPO + vLLM colocate** on L4 / A100.
+Stack: **Qwen3-1.7B + Unsloth QLoRA + TRL GRPO + vLLM colocate** on a single L4 — **56 min wall-clock**.
+
+<div class="callout dim">
+
+**Receipt: the auto-abort fired.** On the published run Stage C didn't beat Stage B by the margin we required, so the runner kept the SFT checkpoint. The follow-up GRPO-400 run that ignored the abort regressed (Hub: `sentinel-overseer-qwen3-1.7b-grpo400`). Honest training infra > fragile leaderboard.
+
+</div>
 
 ---
 
@@ -287,6 +289,72 @@ A genuinely fresh angle on the official themes: **scalable oversight** via an en
 
 ---
 
+## SENTINEL / Live — the env ships as a product
+
+Beyond a training environment, SENTINEL exposes the trained Overseer as a **public oversight API** any LLM agent can POST to:
+
+```bash
+curl -X POST https://elliot89-sentinel.hf.space/live/oversee \
+  -H 'Content-Type: application/json' \
+  -d '{"action_description":"DROP TABLE users","proposed_target":"users","severity_hint":"critical"}'
+# → {"decision":"block","severity_assessed":"catastrophic","shield_triggered":false,"latency_ms":1, ...}
+```
+
+| Feature | What it does |
+|---|---|
+| 🛡️ **Prompt-injection shield** | 10 regex patterns ("ignore previous instructions", `<\|im_start\|>`, …) → force-escalate |
+| 📋 **Copy-as-agent-code** | Gradio panel auto-generates `curl` / `requests` / `langchain` snippets |
+| 🏆 **Live Reward Scoreboard** | Cumulative reward + F1 + TP/FP/TN/FN, refreshes after every `/step` |
+| 🔌 **API Explorer tab** | One ▶️ Try card per route, exercises the real FastAPI request path |
+
+The same `grade_overseer_decision()` used during training scores live verdicts — **no separate reward path for serving**.
+
+---
+
+## Reproducibility — two training tracks
+
+<!-- _class: split -->
+
+<div class="cols">
+
+<div>
+
+### 🏭 Production (HF Jobs)
+
+`scripts/launch_hf_job.sh` → `hf jobs uv run`
+
+- **Qwen3-1.7B** + Unsloth + vLLM
+- L4 × 1, ~56 min
+- Pinned PEP 723 inline deps
+- Auto-pushes to Hub + git-commits artifacts
+- This is what produced **F1 = 0.969**
+
+</div>
+
+<div>
+
+### 🎓 Judge-runnable (Colab)
+
+`training/grpo_colab.ipynb` (one-click)
+
+- **Qwen2.5-0.5B** + vanilla TRL + bitsandbytes
+- T4 free tier, ~15 min for a 50-step demo
+- **No unsloth** — zero monkeypatches, zero fragility
+- Self-contained: HTTP-fetch dataset, inline grader
+- Same reward function, same env, smaller model
+
+</div>
+
+</div>
+
+<div class="callout">
+
+**Reliability over speed for re-runs.** The Colab path trades ~2× training speedup for "boring stack that always installs cleanly."
+
+</div>
+
+---
+
 ## Ship · Try it yourself
 
 <!-- _class: split -->
@@ -319,11 +387,12 @@ env.reset(task_id="war_room", seed=42)
 
 ### What SENTINEL is
 
-- OpenEnv v0.2.3 compliant · FastAPI + Gradio
-- 3 task tiers · 50+ procedural scenarios
-- 321-sample RFT dataset for SFT
-- 3-stage training pipeline (Warmup GRPO → RFT → Curriculum GRPO)
-- **Pre-collected baselines for 7 Overseers** — every number in this deck is real and reproducible
+- OpenEnv v0.2.3 compliant · FastAPI + Gradio (3 tabs)
+- 3 task tiers · 50+ procedural scenarios · schema drift
+- 321-sample RFT dataset (`Elliot89/sentinel-rft-v1`)
+- 3-stage training + **honest auto-abort**
+- **Live oversight API** with prompt-injection shield
+- **Pre-collected baselines for 7 Overseers** — every number is real and reproducible
 
 </div>
 

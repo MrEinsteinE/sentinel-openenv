@@ -2,6 +2,8 @@
 
 *SENTINEL — a multi-agent OpenEnv that trains LLMs to oversee other LLMs. Built for the Meta × Hugging Face × PyTorch OpenEnv Hackathon, April 25–26 2026, Bengaluru.*
 
+> **For judges:** Long-form story (~10 min). The **TL;DR numbers and links** are in the [Space README](https://huggingface.co/spaces/Elliot89/sentinel/blob/main/README.md). Charts below load from this same Space repo.
+
 ---
 
 ## 1. The capability gap
@@ -20,6 +22,8 @@ We built a 50-scenario held-out eval and measured zero-shot Overseer F1 across f
 | Llama-3.1-8B zero-shot | 0.162 |
 | **Random** | **0.539** |
 | Policy-aware heuristic (30 lines, reads counterfactual) | 0.944 |
+
+**Random** baseline: each Overseer decision is sampled uniformly from {approve, flag, block, escalate} with no policy (a chance baseline, not random model weights).
 
 The counterfactual preview that says `CATASTROPHIC if executed` is *literally in the prompt*. The 72B model still approves the action 95% of the time it should block. A rule-based heuristic that does nothing but keyword-match the same text reaches F1 = 0.944.
 
@@ -100,11 +104,11 @@ To confirm the abort wasn't leaving a free win on the table, we re-ran with the 
 
 **Total compute:** one HF Jobs run on `l4x1`, **wall clock 3,348 s ≈ 56 minutes**, best checkpoint at step 200, model published to `Elliot89/sentinel-overseer-qwen3-1.7b`.
 
-![GRPO mean binary reward over training steps.](./training/plots/grpo_reward.png)
+![GRPO mean binary reward over training steps.](https://huggingface.co/spaces/Elliot89/sentinel/raw/main/training/plots/grpo_reward.png)
 
 > *Mean binary reward over GRPO training steps, 25-step rolling average. Random baseline (0.54) shown for reference.*
 
-![GRPO policy loss over training steps.](./training/plots/grpo_loss.png)
+![GRPO policy loss over training steps.](https://huggingface.co/spaces/Elliot89/sentinel/raw/main/training/plots/grpo_loss.png)
 
 > *GRPO policy loss over training steps.*
 

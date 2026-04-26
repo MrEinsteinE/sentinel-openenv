@@ -164,7 +164,7 @@ It uses the **populator pattern** throughout — each `gr.Tab(...)` body calls a
 - `GET /grader` exposes them at the top level alongside `overseer_metrics` (P/R/F1) and `overseer_confusion` (lowercase keys: `tp`/`fp`/`tn`/`fn`)
 - The Reward Scoreboard banner in both Gradio tabs reads `/grader` and renders a markdown table with color-coded F1 thresholds (🟢 ≥ 0.85, 🟡 ≥ 0.50, 🔴 below)
 
-**Cleanup script:** `scripts/hf_post_push_cleanup.py` (called by `scripts/deploy_hf.sh`) is a standalone Python script. The cleanup logic was previously embedded as bash heredocs (`python - <<PY ... PY`); on Git Bash for Windows the heredoc parser tripped on a colon-suffixed string literal and crashed before frontmatter strip + bloat folder deletion ran. Now it's a plain `python scripts/hf_post_push_cleanup.py --repo-id ...` invocation that runs identically on bash, dash, Git Bash, and PowerShell.
+**Cleanup script:** `scripts/hf_post_push_cleanup.py` (called by `scripts/deploy_hf.sh`) strips `base_path` frontmatter, deletes accidental bloat (`env/`, checkpoints, …), and prunes **Space-only** clutter (`tools/`, `scripts/`, extra `eval_data/*` baselines). **`blog.md` and `pitch/` stay on the Space** for judges; GitHub remains the full dev repo. Run: `python scripts/hf_post_push_cleanup.py --repo-id ...`.
 
 ## Deployment notes
 

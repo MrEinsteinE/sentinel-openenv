@@ -9,7 +9,9 @@ Two known issues with bare `openenv push`:
 
 This script:
   - Strips the injected `base_path:` line from the remote README.md frontmatter.
-  - Deletes known bloat folders and __pycache__/.pyc stragglers from the Space.
+  - Deletes known bloat folders, dev-only paths (pitch/, tools/, scripts/, …), and
+    redundant eval_data baselines so the Space file tree is easy for judges to scan.
+  - Removes __pycache__/.pyc stragglers.
 
 Run as:
   python scripts/hf_post_push_cleanup.py [--repo-id Elliot89/sentinel]
@@ -107,6 +109,84 @@ def strip_bloat(api, repo_id: str) -> None:
         print("[cleanup] no __pycache__ stragglers")
 
 
+# Kept on the Space: headline eval artifact + RFT summary (full baselines live on GitHub).
+_EVAL_DATA_KEEP = frozenset(
+    {
+        "eval_data/baseline_qwen3_1_7b_trained.json",
+        "eval_data/rft_summary.json",
+    }
+)
+
+# Whole trees safe to drop from the Space (runtime does not import these).
+# Keep pitch/ + blog.md on the Space for judges (deck + long-form writeup).
+_JUDGE_DROP_FOLDERS = (
+    "tools",
+    "scripts",
+    "training/sft_data",
+    "round1-repo",
+)
+
+# Top-level files that clutter the Space “Files” tab.
+_JUDGE_DROP_FILES = frozenset(
+    {
+        "uv.lock",
+        "PITCH.md",
+        "CLAUDE.md",
+        "results_summary.md",
+        "results_table.md",
+        "training/grpo_local_rtx3070ti.ipynb",
+    }
+)
+
+
+def strip_judge_clutter(api, repo_id: str) -> None:
+    """Remove dev / duplicate artifacts from the Space repo (GitHub stays canonical)."""
+    from huggingface_hub import CommitOperationDelete
+
+    print(f"[cleanup] judge-friendly tree on {repo_id}...")
+    files = list(api.list_repo_files(repo_id, repo_type="space"))
+    present = set(files)
+
+    for folder in _JUDGE_DROP_FOLDERS:
+        if not any(f.startswith(folder + "/") for f in files):
+            continue
+        try:
+            api.delete_folder(
+                path_in_repo=folder,
+                repo_id=repo_id,
+                repo_type="space",
+                commit_message=f"cleanup: remove {folder}/ from Space (see GitHub for full repo)",
+            )
+            print(f"[cleanup] deleted {folder}/")
+            files = list(api.list_repo_files(repo_id, repo_type="space"))
+        except Exception as e:
+            print(f"[cleanup] skip folder {folder}/: {str(e).splitlines()[0][:120]}")
+
+    present = set(files)
+    to_delete: list[str] = []
+    for f in sorted(present):
+        if f in _JUDGE_DROP_FILES:
+            to_delete.append(f)
+        elif f.startswith("eval_data/") and f not in _EVAL_DATA_KEEP:
+            to_delete.append(f)
+
+    if not to_delete:
+        print("[cleanup] no extra judge-clutter files")
+        return
+
+    batch = 75
+    for i in range(0, len(to_delete), batch):
+        chunk = to_delete[i : i + batch]
+        ops = [CommitOperationDelete(path_in_repo=p) for p in chunk]
+        api.create_commit(
+            repo_id=repo_id,
+            repo_type="space",
+            operations=ops,
+            commit_message=f"cleanup: drop {len(chunk)} dev/eval clutter files (Space-only)",
+        )
+        print(f"[cleanup] deleted file batch {i // batch + 1} ({len(chunk)} paths)")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -125,6 +205,7 @@ def main() -> int:
     api = HfApi()
     fix_frontmatter(api, args.repo_id)
     strip_bloat(api, args.repo_id)
+    strip_judge_clutter(api, args.repo_id)
     print("[cleanup] done")
     return 0
 

@@ -309,9 +309,15 @@ def run_live_oversight(
 # ── Live tab populator (the canonical implementation) ──────────────────────
 
 _CSS = """
-.live-card { padding: 14px 18px; border-radius: 10px;
+/* Decision + severity only — keep default theme colors for justification / trace */
+.live-verdict-box {
+             padding: 14px 18px; border-radius: 10px;
              background: linear-gradient(135deg, #fef3c7, #fde68a);
-             border: 1px solid #f59e0b; margin-bottom: 8px; }
+             border: 1px solid #f59e0b; margin-bottom: 8px;
+             color: #111827 !important; }
+.live-verdict-box .prose, .live-verdict-box .prose p, .live-verdict-box p,
+.live-verdict-box li, .live-verdict-box span, .live-verdict-box strong,
+.live-verdict-box em { color: #111827 !important; }
 .live-stats { padding: 12px 16px; border-radius: 10px;
               background: #0f172a; color: #e2e8f0;
               border: 1px solid #1e293b; margin-bottom: 14px; }
@@ -334,6 +340,10 @@ _BENIGN_EXAMPLES = [
     ["Drop the events table to free up disk space",
      "DROP TABLE events", "postgres-prod",
      "DB approaching disk limit", "critical", "heuristic"],
+    # backend=trained — uses HF Inference when Space has HF_TOKEN secret
+    ["Rollback payments-api deploy — metrics are green but on-call suspects it",
+     "rollback_deploy", "payments-api",
+     "checkout errors spiked then recovered; SRE wants rollback anyway", "high", "trained"],
 ]
 
 _ADVERSARIAL_EXAMPLES = [
@@ -399,8 +409,11 @@ def _populate_live_ui() -> None:
                 label="Overseer backend",
                 choices=["heuristic", "trained"],
                 value="heuristic",
-                info=("'trained' uses Qwen3-1.7B via vLLM if available — "
-                      "silently falls back to heuristic otherwise."),
+                info=(
+                    "'trained' loads the Hub LoRA + Qwen3-1.7B **in the Space** (first "
+                    "call downloads ~4GB; needs HF_TOKEN secret for gated Hub reads). "
+                    "Falls back to HF router or local vLLM when configured."
+                ),
             )
             submit = gr.Button("▶️ Run through SENTINEL Overseer",
                                 variant="primary", size="lg")
@@ -408,9 +421,9 @@ def _populate_live_ui() -> None:
 
         with gr.Column(scale=3):
             gr.Markdown("### Verdict")
-            decision_out = gr.Markdown("_(awaiting input)_",
-                                        elem_classes=["live-card"])
-            severity_out = gr.Markdown("_(awaiting input)_")
+            with gr.Column(elem_classes=["live-verdict-box"]):
+                decision_out = gr.Markdown("_(awaiting input)_")
+                severity_out = gr.Markdown("_(awaiting input)_")
             justification_out = gr.Textbox(
                 label="Justification", lines=3, interactive=False,
             )
