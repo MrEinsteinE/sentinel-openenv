@@ -7,25 +7,22 @@
 @import "default";
 
 :root {
-  --bg:          #ffffff;
-  --bg-2:        #f8fafc;
-  --fg:          #000000;
-  --fg-dim:      #6b7280;
+  --bg:          #0b1020;
+  --bg-2:        #121a33;
+  --fg:          #e6ecff;
+  --fg-dim:      #9aa7cc;
   --accent:      #6366f1;  /* indigo-500 */
   --accent-2:    #ef4444;  /* red-500  */
   --accent-3:    #22c55e;  /* green-500 */
   --accent-4:    #f59e0b;  /* amber-500 */
-  --code-bg:     #f3f4f6;
+  --code-bg:     #0f172a;
 }
 
 section {
   background: linear-gradient(135deg, var(--bg) 0%, var(--bg-2) 100%);
   color: var(--fg);
   font-family: -apple-system, "SF Pro Display", "Inter", "Segoe UI", sans-serif;
-  padding: 80px 70px;
-  box-sizing: border-box;
-  position: relative;
-  min-height: 100vh;
+  padding: 60px 70px;
 }
 
 h1 {
@@ -99,8 +96,8 @@ table {
   border-collapse: collapse;
 }
 th {
-  background: rgba(99, 102, 241, 0.08);
-  color: var(--fg);
+  background: var(--accent);
+  color: white;
   font-weight: 700;
   padding: 10px 14px;
   text-align: left;
@@ -177,11 +174,3 @@ section::after {
   margin: 16px 0;
   font-size: 22px;
 }
-
-/* Fix overlapping and spacing */
-h1, h2, h3 { line-height: 1.25; margin-top: 0; }
-p, li { word-break: break-word; overflow-wrap: break-word; }
-section.split .cols { align-items: start; }
-section.stat .huge { word-break: break-word; white-space: normal; max-width: 100%; }
-pre, code { white-space: pre-wrap; }
-section::after { position: absolute; right: 70px; bottom: 18px; left: 70px; text-align: right; color: var(--fg-dim); }
