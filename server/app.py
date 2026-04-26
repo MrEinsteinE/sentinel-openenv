@@ -241,11 +241,51 @@ def grader():
 import gradio as gr
 
 
-def _play_one_episode(task_id: str, seed_str: str, overseer_style: str) -> tuple[str, str, str, str]:
+def _build_reward_banner_md(
+    final_state=None,
+    f1_dict: dict | None = None,
+    *,
+    placeholder: bool = False,
+) -> str:
+    """Render the Replay Viewer's prominent reward banner. Called once
+    on initial page load (placeholder) and once after each Play Episode.
+    """
+    if placeholder or final_state is None:
+        return (
+            "### 🏆 Reward Scoreboard *(updates after every Play Episode click)*\n\n"
+            "*Pick a task + seed, hit ▶️ Play Episode, and the dual reward "
+            "streams + Overseer F1 + confusion matrix appear here in real time.*"
+        )
+    f1 = f1_dict or {}
+    f1_val = float(f1.get("f1", 0.0) or 0.0)
+    f1_emoji = "🟢" if f1_val >= 0.85 else ("🟡" if f1_val >= 0.5 else "🔴")
+    conf = final_state.overseer_confusion or {}
+    return (
+        "### 🏆 Reward Scoreboard *(this episode)*\n\n"
+        f"| Episode | Task | Step | Status |\n"
+        f"|---|---|:---:|:---:|\n"
+        f"| `{(final_state.episode_id or '—')[:14]}…` | "
+        f"`{final_state.task_id}` | `{final_state.step_count}` | "
+        f"{'✅ done' if final_state.done else '⏳ running'} |\n\n"
+        f"| 🤖 Responder cum reward | 🛡️ Overseer cum reward | "
+        f"{f1_emoji} Overseer F1 | TP / FP / TN / FN |\n"
+        f"|:---:|:---:|:---:|:---:|\n"
+        f"| **`{final_state.cumulative_responder_reward:+.3f}`** | "
+        f"**`{final_state.cumulative_overseer_reward:+.3f}`** | "
+        f"**`{f1_val:.3f}`** | "
+        f"`TP={conf.get('tp', 0)} · FP={conf.get('fp', 0)} · "
+        f"TN={conf.get('tn', 0)} · FN={conf.get('fn', 0)}` |\n\n"
+        f"*Precision = `{f1.get('precision', 0):.3f}` · "
+        f"Recall = `{f1.get('recall', 0):.3f}` · "
+        f"Drift events triggered = `{len(final_state.drift_events or [])}`*"
+    )
+
+
+def _play_one_episode(task_id: str, seed_str: str, overseer_style: str) -> tuple[str, str, str, str, str]:
     """Auto-play a full episode using heuristics.
 
-    Returns (incident_panel_md, transcript_md, metrics_md, reward_plot_data_str).
-    Used as the Gradio demo hook.
+    Returns (incident_panel_md, transcript_md, metrics_md, reward_plot_data_str,
+             reward_banner_md). Used as the Gradio demo hook.
     """
     env = _get_env()
     try:
@@ -334,7 +374,8 @@ def _play_one_episode(task_id: str, seed_str: str, overseer_style: str) -> tuple
         f"| Drift events | `{len(final_state.drift_events)}` |\n"
     )
     reward_str = json.dumps(reward_series)
-    return incident, "\n".join(transcript), metrics, reward_str
+    banner = _build_reward_banner_md(final_state, f1)
+    return incident, "\n".join(transcript), metrics, reward_str, banner
 
 
 def _overseer_heuristic(style: str, obs: Observation, pa) -> tuple[OverseerDecision, str]:
@@ -402,6 +443,9 @@ def _populate_replay_viewer_ui() -> None:
         "flag, block, or escalate each one. Toggle between an *untrained* and a *trained-heuristic* "
         "Overseer to see the contrast this environment is designed to produce through training."
     )
+
+    reward_banner = gr.Markdown(_build_reward_banner_md(placeholder=True))
+
     with gr.Row():
         with gr.Column(scale=1):
             gr.HTML('<div class="section-title">Episode Setup</div>')
@@ -416,7 +460,7 @@ def _populate_replay_viewer_ui() -> None:
                          ("🟢 Trained-Heuristic Overseer", "trained")],
                 value="trained", label="Overseer Style")
             play_btn = gr.Button("▶️ Play Episode", variant="primary", size="lg")
-            gr.Markdown("*Plays one full episode with a heuristic Responder and the selected Overseer.*")
+            gr.Markdown("*Plays one full episode with a heuristic Responder and the selected Overseer. The 🏆 Reward Scoreboard above updates the moment the episode finishes.*")
             gr.HTML('<div class="section-title">Reward Trajectory</div>')
             reward_json = gr.Textbox(label="Reward series (steps → cumulative Overseer reward)", lines=6)
 
@@ -430,7 +474,8 @@ def _populate_replay_viewer_ui() -> None:
 
     play_btn.click(fn=_play_one_episode,
                    inputs=[task_dd, seed_tb, style_dd],
-                   outputs=[incident_md, transcript_md, metrics_md, reward_json])
+                   outputs=[incident_md, transcript_md, metrics_md,
+                            reward_json, reward_banner])
 
 
 def _build_gradio_ui() -> gr.Blocks:
@@ -448,7 +493,10 @@ def _build_gradio_ui() -> gr.Blocks:
     return demo
 
 
-_gradio_demo = __import__('server.live_ui', fromlist=['combine_with_live_tab']).combine_with_live_tab(_populate_replay_viewer_ui)
+from server.live_ui import combine_with_live_tab as _combine_tabs
+from server.api_explorer_ui import _populate_api_explorer_ui
+
+_gradio_demo = _combine_tabs(_populate_replay_viewer_ui, _populate_api_explorer_ui)
 # Mount Gradio at the root path. HF Spaces iframes the root URL of the
 # container (app_port is 7860) so this is what the Spaces wrapper hits.
 # The OpenEnv CLI injects `base_path: /web` into the README frontmatter;

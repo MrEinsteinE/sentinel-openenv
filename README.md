@@ -91,6 +91,8 @@ curl -X POST https://elliot89-sentinel.hf.space/live/oversee \
 | **Endpoint** | `POST /live/oversee` (heuristic backend always works; trained Qwen3-1.7B used opportunistically when vLLM is reachable). |
 | **🛡️ Prompt-injection shield** | Detects 10 adversarial override patterns ("ignore previous instructions", `<\|im_start\|>`, etc) and force-escalates. |
 | **📋 Copy-as-agent-code** | New panel on the live tab: pick `curl` / `python (requests)` / `python (langchain)` and the snippet **auto-rebuilds from your inputs** so judges can paste it straight into an LLM agent and call the public Space over the Internet. |
+| **🔌 API Explorer tab (NEW)** | Third tab on the Space — every endpoint (`/health`, `/tasks`, `/reset`, `/step`, `/state`, `/grader`, `/live/oversee`, `/live/stats`, `/live/health`, `/docs`) has a one-click **▶️ Try it** button + side-by-side raw JSON response and equivalent `curl` snippet pointed at the public URL. No terminal required. |
+| **🏆 Live Reward Scoreboard** | Pinned to the top of both the Replay Viewer and the API Explorer — cumulative Responder reward, cumulative Overseer reward, F1 (color-coded 🟢🟡🔴), and TP/FP/TN/FN. **Updates after every `/reset` or `/step` click**, so judges can watch rewards move in real time. |
 | **Lifetime stats** | `GET /live/stats` exposes per-decision, per-severity, p50/p99 latency, catastrophic-blocked, and shield-triggered counts since server start. |
 | **Demo script** | `python tools/agent_demo.py --use-mock-llm` runs a 5-step incident loop in 6 seconds, no API key. |
 | **Full docs** | [SENTINEL_LIVE.md](./SENTINEL_LIVE.md) |

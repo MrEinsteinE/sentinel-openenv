@@ -501,16 +501,20 @@ def build_live_tab() -> gr.Blocks:
 
 def combine_with_live_tab(
     populate_replay_viewer: Callable[[], None],
+    populate_api_explorer: Callable[[], None] | None = None,
 ) -> gr.Blocks:
-    """Build a single combined Blocks containing two tabs:
+    """Build a single combined Blocks containing two or three tabs:
 
-      Tab 1 — 🛡️ Live Oversight Demo (the *headline* feature)
-      Tab 2 — 📼 Replay Viewer (the original 3-column trace viewer)
+      Tab 1 — 🛡️ Live Oversight Demo  (the *headline* feature)
+      Tab 2 — 📼 Replay Viewer         (the original 3-column trace viewer)
+      Tab 3 — 🔌 API Explorer          (interactive every-endpoint inspector)
+                                        rendered only if populate_api_explorer
+                                        is provided.
 
-    `populate_replay_viewer` is a parameter-less callable that, when
-    invoked inside a Gradio context, adds the replay viewer's components
-    to the current context. Caller (server/app.py) provides this via
-    a small helper that wraps the existing replay-viewer construction.
+    Both populators are parameter-less callables that, when invoked inside
+    a Gradio context, add their components to the current `gr.Tab(...)`
+    context. Caller (server/app.py) provides them via small helpers that
+    wrap the existing UI construction.
 
     The populator pattern (vs the older `existing_demo.render()` pattern)
     is what fixes the duplicated "Real-time Agent Oversight" header bug:
@@ -532,4 +536,7 @@ def combine_with_live_tab(
                 _populate_live_ui()
             with gr.Tab("📼 Replay Viewer (3-column)"):
                 populate_replay_viewer()
+            if populate_api_explorer is not None:
+                with gr.Tab("🔌 API Explorer (NEW)"):
+                    populate_api_explorer()
     return combined

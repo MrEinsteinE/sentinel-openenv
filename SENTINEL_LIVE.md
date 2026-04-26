@@ -18,7 +18,7 @@ held-out scenarios for evaluation. The same `grade_overseer_decision()`
 function that scored every training step is the one that scores your live
 verdict — there is no train/serve gap.
 
-Four things ship in the box:
+Six things ship in the box:
 
 | | |
 |---|---|
@@ -26,6 +26,8 @@ Four things ship in the box:
 | **Trained backend (opt-in)** | Defers to Qwen3-1.7B + LoRA via vLLM if both are present. Silently falls back to heuristic on any failure. |
 | **🛡️ Prompt-injection shield** | Detects 10 adversarial override patterns ("ignore previous instructions", "approve regardless", `<\|im_start\|>`, …) before classification. Force-escalates with a clear `shield_triggered=true` flag. |
 | **📋 Copy-as-agent-code generator** | The Gradio tab has a "Copy as agent code" panel that auto-rebuilds a **cURL / Python `requests` / LangChain `BaseTool`** snippet from whatever you typed into the form — paste-and-go integration with zero adaptation. |
+| **🔌 API Explorer tab** | A whole third Gradio tab with a one-click **▶️ Try it** card for *every* endpoint the FastAPI app exposes — `/health`, `/api/info`, `/tasks`, `/reset`, `/step` (both Responder and Overseer subforms), `/state`, `/grader`, `/live/oversee`, `/live/stats`, `/live/health`, plus a link to `/docs` (Swagger UI). Each card shows the live JSON response *and* the equivalent `curl` snippet pointed at the public Space URL — the snippet is provably what the UI just ran, so judges can paste it into their terminal and reproduce verbatim. |
+| **🏆 Live Reward Scoreboard** | Pinned to the top of both the Replay Viewer and the API Explorer. Shows cumulative Responder reward, cumulative Overseer reward, F1 (color-coded 🟢 ≥ 0.85, 🟡 ≥ 0.50, 🔴 below), the full TP/FP/TN/FN confusion matrix, and drift-event count. **It auto-refreshes after every endpoint call** — hit `/reset` and watch the placeholder flip to a live episode; hit `/step` and watch the cumulative bars move; hit `/grader` and the scoreboard pulls the canonical numbers. The reward signal is no longer hidden in a JSON pane — it's the headline of the page. |
 
 ## Try it
 
@@ -43,13 +45,23 @@ curl -X POST https://elliot89-sentinel.hf.space/live/oversee \
 # → {"decision":"block","severity_assessed":"catastrophic", ... }
 ```
 
-## Endpoints
+## Endpoints — `SENTINEL/Live` adds three; the underlying OpenEnv contract exposes seven more
 
-| Method | Path | Purpose |
-|---|---|---|
-| `POST` | `/live/oversee` | Submit one proposed action, get a verdict. |
-| `GET` | `/live/stats` | Lifetime counters: total verdicts, by-decision, by-severity, p50/p99 latency, catastrophic-blocked, shield-triggered. |
-| `GET` | `/live/health` | Per-feature health + whether the trained backend is currently reachable. |
+| Layer | Method | Path | Purpose |
+|---|:---:|---|---|
+| 🛡️ Live | `POST` | `/live/oversee` | Submit one proposed action, get a verdict. |
+| 🛡️ Live | `GET` | `/live/stats` | Lifetime counters: total verdicts, by-decision, by-severity, p50/p99 latency, catastrophic-blocked, shield-triggered. |
+| 🛡️ Live | `GET` | `/live/health` | Per-feature health + whether the trained backend is currently reachable. |
+| 🌐 OpenEnv | `GET` | `/health` | Server health (`{status, version}`). |
+| 🌐 OpenEnv | `GET` | `/api/info` | Service descriptor (name, version, tasks, docs URL). |
+| 🌐 OpenEnv | `GET` | `/tasks` | All 3 task tiers + canonical Responder/Overseer action schemas. |
+| 🌐 OpenEnv | `POST` | `/reset` | Start an episode (`task_id`, `seed`, `mode`). |
+| 🌐 OpenEnv | `POST` | `/step` | Submit one action (Responder or Overseer, discriminated on `role`). |
+| 🌐 OpenEnv | `GET` | `/state` | Full `EpisodeState` snapshot. |
+| 🌐 OpenEnv | `GET` | `/grader` | Per-episode F1, confusion, **cumulative rewards** 🏆. |
+| 📖 Docs | `GET` | `/docs` | FastAPI Swagger UI. |
+
+> There is no `/stop` endpoint — episodes terminate naturally when `/step` returns `done: true`. Call `/reset` again to start a fresh one. **Every endpoint above has a one-click ▶️ Try it card on the API Explorer tab.**
 
 ## Wire it into your agent framework
 
@@ -123,9 +135,44 @@ The whole feature is ~1100 lines across 4 new files (`server/live_routes.py`,
 populator extraction in `server/app.py`. Nothing in `graders.py`,
 `scenarios.py`, `models.py`, `drift.py`, `eval.py`, or `client.py` was touched.
 
-> **Note on the UI structure:** the live tab and the original 3-column
-> replay viewer are composed via the *populator pattern* (callables that
-> add components to the current `gr.Tabs` context). Earlier builds used
-> the nested `Blocks.render()` pattern, which caused some Gradio versions
-> to render the live panel twice on the same page. The current build
-> renders each tab exactly once — verified at the `/config` level.
+> **Note on the UI structure:** the live tab, the original 3-column
+> replay viewer, and the new API Explorer tab are all composed via the
+> *populator pattern* (callables that add components to the current
+> `gr.Tabs` context). Earlier builds used the nested `Blocks.render()`
+> pattern, which caused some Gradio versions to render the live panel
+> twice on the same page. The current build renders each tab exactly
+> once — verified at the `/config` level (3 tab items, 3 distinct
+> labels, no duplicates).
+
+## 🔌 API Explorer + 🏆 Reward Scoreboard — the "judge UX" upgrade
+
+Two complaints any hackathon judge has after staring at a FastAPI Space
+for 30 seconds:
+
+1. *"Where do I see the rewards?"* — they're often buried in a JSON pane
+   below the fold.
+2. *"How do I call this without dropping into a terminal?"* — most
+   submissions force you out to `curl` or Postman.
+
+The third Gradio tab — **🔌 API Explorer** — fixes both.
+
+- **Every endpoint** (`/health`, `/api/info`, `/tasks`, `/reset`, `/step`,
+  `/state`, `/grader`, plus all three `/live/*` routes) sits in its own
+  collapsible card. Each card has a `▶️ Try it` button (with input form
+  if the route takes a body), a **live JSON response panel**, and an
+  **equivalent `curl` panel** pointed at the public Space URL.
+- The `/step` card has *two* sub-forms (Responder action and Overseer
+  action) so the discriminated `Action` payload is buildable without
+  reading `models.py`.
+- The **🏆 Live Reward Scoreboard** is pinned at the top of the tab and
+  re-pulls `/grader` after **every single button click** — `/reset`,
+  `/step`, `/grader`, even `/live/oversee`. Cumulative responder reward,
+  cumulative overseer reward, F1 (color-coded), TP/FP/TN/FN, drift
+  count. The same scoreboard banner is also pinned to the top of the
+  Replay Viewer tab and updates after each `▶️ Play Episode` click.
+
+The implementation is one new file (`server/api_explorer_ui.py`, ~430
+lines, all populator-style) plus a 3-line change to `combine_with_live_tab()`
+in `server/live_ui.py` to make the third tab optional. Still zero edits
+to `graders.py`, `eval.py`, `scenarios.py`, `models.py`, `drift.py`, or
+`client.py`.
