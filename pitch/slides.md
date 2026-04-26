@@ -251,18 +251,16 @@ Stack: **Qwen3-1.7B + Unsloth QLoRA + TRL GRPO + vLLM colocate** on L4 / A100.
 
 ## The Drift Ops gap — the real research test
 
-| Overseer | action_screen | war_room | **drift_ops** | Δ on drift |
+| Overseer | action_screen | war_room | **drift_ops** | Overall |
 |---|---:|---:|---:|---:|
-| policy-aware (counterfactual reader) | 1.000 | 1.000 | **0.863** | −14 pp |
-| trained Overseer *(target)* | ≥0.85 | ≥0.75 | **≥0.90** | **+4 pp** |
+| policy-aware (counterfactual reader) | 1.000 | 1.000 | **0.863** | 0.944 |
+| **Qwen3-1.7B + SENTINEL** *(shipped)* | **1.000** | **0.992** | **0.924** | **0.969** |
 
-The rule-based heuristic **flags everything** after drift (33 FPs on `drift_ops`).
-
-**A trained Overseer** reads drift events and selectively re-approves actions that don't reference renamed services — the exact kind of *contextual reasoning* that's impossible for a rule.
+The rule-based heuristic **flags too much** after drift (still scores 0.863). A 1.7B trained Overseer reads drift events and **selectively re-approves** actions that don't reference renamed services — the exact contextual reasoning a rule can't do, and the gap that justifies a trained policy over a hand-coded one.
 
 <div class="callout">
 
-This gap is why we built SENTINEL — oversight policies that **generalize** past schema changes.
+**+6.1 pp on the hardest tier** — and that's the tier closest to real-world failure modes.
 
 </div>
 
@@ -281,11 +279,11 @@ A genuinely fresh angle on the official themes: **scalable oversight** via an en
 
 <!-- _class: stat -->
 
-## The ask
+## The result
 
-<div class="huge">F1: 0.09 → 0.85</div>
+<div class="huge">F1: 0.000 → 0.969</div>
 
-<div class="caption">Train <strong>Qwen3-1.7B</strong> to beat <strong>every</strong> frontier model we tested.<br/>Public env. Reproducible eval. Real gap to close.</div>
+<div class="caption"><strong>Qwen3-1.7B</strong> beats every frontier model we tested — including <strong>Qwen2.5-72B by 10.4×</strong>.<br/>Public env. Reproducible eval. 56 minutes of training on a single L4.</div>
 
 ---
 

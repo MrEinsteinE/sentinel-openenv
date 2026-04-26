@@ -82,12 +82,27 @@ def main() -> int:
     args = parser.parse_args()
 
     baselines = _load_baselines()
-    trained = _trained_from_run_summary()
-    if trained is None:
-        print("[regen_baseline_plot] WARN: no trained F1 in run_summary.json; "
-              "plot will be missing the trained row.", file=sys.stderr)
+    # Prefer the canonical micro-F1 from eval_data/baseline_qwen3_1_7b_trained.json
+    # over the macro-mean computed from training/run_summary.json. The eval JSON is
+    # the published-checkpoint number that the README and blog quote; run_summary
+    # may reflect a later GRPO follow-up that didn't survive the auto-abort.
+    eval_trained = baselines.get("qwen3_1_7b_trained")
+    eval_has_overall = isinstance(eval_trained, dict) and isinstance(
+        eval_trained.get("overall"), dict
+    )
+    if eval_has_overall:
+        print(f"[regen_baseline_plot] using eval JSON micro-F1 for trained row "
+              f"(overall_f1={eval_trained['overall'].get('f1'):.4f})")
     else:
-        baselines["qwen3_1_7b_trained"] = trained
+        trained = _trained_from_run_summary()
+        if trained is None:
+            print("[regen_baseline_plot] WARN: no trained F1 in eval_data/ or "
+                  "run_summary.json; plot will be missing the trained row.",
+                  file=sys.stderr)
+        else:
+            print("[regen_baseline_plot] no eval JSON for trained model; "
+                  "falling back to macro-mean from run_summary.json")
+            baselines["qwen3_1_7b_trained"] = trained
 
     include = [
         "naive",

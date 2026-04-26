@@ -110,13 +110,13 @@ To confirm the abort wasn't leaving a free win on the table, we re-ran with the 
 
 ## 5. Why this matters
 
-To our knowledge, none of the publicly released OpenEnv environments prior to this hackathon target oversight specifically. Existing envs measure agents' ability to *act*; SENTINEL measures their ability to *judge*. That's the missing axis.
+To our knowledge, none of the publicly released OpenEnv environments prior to this hackathon target oversight specifically. Existing envs measure agents' ability to *act*; SENTINEL measures their ability to *judge*. That's the missing axis — and the entire AI-safety stack downstream of "human in the loop" depends on something filling it.
 
-Beyond the hackathon: every team shipping agentic frameworks — coding agents, ops agents, trading bots — hits the same wall. They built a capable Responder; they have nothing reliable in the loop to catch the 1-in-200 catastrophic action. The default answer today is "human in the loop," which means humans become the bottleneck and approve-by-default within a week.
+Every team shipping agentic frameworks today — coding agents, ops agents, trading bots — hits the same wall. They built a capable Responder. They have nothing reliable in the loop to catch the 1-in-200 catastrophic action. The default answer is "human review", which means a human becomes the bottleneck and approves-by-default within a week. The next answer has to be a trained AI Overseer. There has to be an environment to train it in.
 
-SENTINEL is a *training environment*, not a benchmark. The 50-scenario eval is the score; the 8,000 training seeds, the procedural generator, the drift injector, the dual reward and the heuristic-as-gold-label trick are all there for anyone who wants to clone the Space, swap in their own base model, and train a stronger overseer of their own.
+That's what SENTINEL is. Not a benchmark — a *training environment*. The 50-scenario held-out eval is the score; the 8,000 procedural training seeds, the drift injector, the dual reward streams, and the heuristic-as-gold-label SFT trick are the substrate. Clone the Space, swap in your own base model, retrain the Overseer. The 1.7B → 0.969 result above says the loop works — the same recipe should scale.
 
-What's next: a real MCP tool surface so the Responder side connects to actual ops APIs, a public leaderboard on the held-out 50, and a co-trained Adversary tier where the Responder is itself optimized to slip catastrophic actions past whatever Overseer is on duty.
+What's next: a real MCP tool surface so the Responder connects to actual ops APIs, a public leaderboard on the held-out 50, and a co-trained Adversary tier where the Responder is itself optimized to slip catastrophic actions past whatever Overseer is on duty. None of that requires a different environment — SENTINEL was designed for it from day one.
 
 ## 6. Try it yourself
 

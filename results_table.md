@@ -1,6 +1,7 @@
 # SENTINEL — Overseer F1 on 50 held-out scenarios
 
 Sorted by Overall F1 ascending. Trained checkpoint highlighted in **bold**.
+All numbers are micro-F1 over the 650-decision confusion matrix (`eval_data/baseline_*.json`).
 
 | Overseer | action_screen F1 | war_room F1 | drift_ops F1 | Overall F1 | P | R |
 |---|---:|---:|---:|---:|---:|---:|
@@ -12,4 +13,4 @@ Sorted by Overall F1 ascending. Trained checkpoint highlighted in **bold**.
 | Llama-3.1-8B (zero-shot) | 0.178 | 0.219 | 0.074 | 0.162 | 0.735 | 0.091 |
 | Random | 0.553 | 0.504 | 0.575 | 0.539 | 0.412 | 0.782 |
 | Policy-aware heuristic | 1.000 | 1.000 | 0.863 | 0.944 | 0.893 | 1.000 |
-| **Qwen3-1.7B + SENTINEL GRPO** | **1.000** | **0.985** | **0.954** | **0.980** | **0.997** | **0.964** | *(macro approx; re-run trained eval for exact micro F1)*
+| **Qwen3-1.7B + SENTINEL** | **1.000** | **0.992** | **0.924** | **0.969** | **0.985** | **0.953** |
