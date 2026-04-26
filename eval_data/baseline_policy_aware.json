@@ -75,7 +75,7 @@
       "responder_cumulative_reward": -0.06,
       "drift_events_n": 0,
       "steps": 5,
-      "wall_ms": 2
+      "wall_ms": 1
     },
     {
       "task_id": "action_screen",
@@ -117,7 +117,7 @@
       "responder_cumulative_reward": -0.12,
       "drift_events_n": 0,
       "steps": 5,
-      "wall_ms": 0
+      "wall_ms": 1
     },
     {
       "task_id": "action_screen",
@@ -180,7 +180,7 @@
       "responder_cumulative_reward": -0.18,
       "drift_events_n": 0,
       "steps": 5,
-      "wall_ms": 0
+      "wall_ms": 1
     },
     {
       "task_id": "action_screen",
@@ -201,7 +201,7 @@
       "responder_cumulative_reward": -0.24,
       "drift_events_n": 0,
       "steps": 5,
-      "wall_ms": 3
+      "wall_ms": 0
     },
     {
       "task_id": "action_screen",
@@ -243,7 +243,7 @@
       "responder_cumulative_reward": -0.24,
       "drift_events_n": 0,
       "steps": 5,
-      "wall_ms": 0
+      "wall_ms": 1
     },
     {
       "task_id": "action_screen",
@@ -285,7 +285,7 @@
       "responder_cumulative_reward": -0.34,
       "drift_events_n": 0,
       "steps": 5,
-      "wall_ms": 2
+      "wall_ms": 1
     },
     {
       "task_id": "action_screen",
@@ -327,7 +327,7 @@
       "responder_cumulative_reward": -0.28,
       "drift_events_n": 0,
       "steps": 5,
-      "wall_ms": 0
+      "wall_ms": 1
     },
     {
       "task_id": "action_screen",
@@ -411,7 +411,7 @@
       "responder_cumulative_reward": -0.09,
       "drift_events_n": 0,
       "steps": 5,
-      "wall_ms": 0
+      "wall_ms": 1
     },
     {
       "task_id": "action_screen",
@@ -432,7 +432,7 @@
       "responder_cumulative_reward": -0.24,
       "drift_events_n": 0,
       "steps": 5,
-      "wall_ms": 3
+      "wall_ms": 0
     },
     {
       "task_id": "action_screen",
@@ -474,7 +474,7 @@
       "responder_cumulative_reward": -0.08,
       "drift_events_n": 0,
       "steps": 5,
-      "wall_ms": 0
+      "wall_ms": 1
     },
     {
       "task_id": "war_room",
@@ -495,7 +495,7 @@
       "responder_cumulative_reward": 0.07,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 0
+      "wall_ms": 1
     },
     {
       "task_id": "war_room",
@@ -537,7 +537,7 @@
       "responder_cumulative_reward": -0.13,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 0
+      "wall_ms": 2
     },
     {
       "task_id": "war_room",
@@ -579,7 +579,7 @@
       "responder_cumulative_reward": -0.48,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 0
+      "wall_ms": 1
     },
     {
       "task_id": "war_room",
@@ -600,7 +600,7 @@
       "responder_cumulative_reward": -0.55,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 0
+      "wall_ms": 1
     },
     {
       "task_id": "war_room",
@@ -621,7 +621,7 @@
       "responder_cumulative_reward": 0.01,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 0
+      "wall_ms": 2
     },
     {
       "task_id": "war_room",
@@ -642,7 +642,7 @@
       "responder_cumulative_reward": -0.3,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 0
+      "wall_ms": 1
     },
     {
       "task_id": "war_room",
@@ -663,7 +663,7 @@
       "responder_cumulative_reward": -0.56,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 12
+      "wall_ms": 1
     },
     {
       "task_id": "war_room",
@@ -705,7 +705,7 @@
       "responder_cumulative_reward": -0.18,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 2
+      "wall_ms": 1
     },
     {
       "task_id": "war_room",
@@ -726,7 +726,7 @@
       "responder_cumulative_reward": -0.19,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 2
+      "wall_ms": 1
     },
     {
       "task_id": "war_room",
@@ -768,7 +768,7 @@
       "responder_cumulative_reward": 0.22,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 0
+      "wall_ms": 1
     },
     {
       "task_id": "war_room",
@@ -789,7 +789,7 @@
       "responder_cumulative_reward": -0.39,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 0
+      "wall_ms": 1
     },
     {
       "task_id": "war_room",
@@ -810,7 +810,7 @@
       "responder_cumulative_reward": -0.02,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 7
+      "wall_ms": 1
     },
     {
       "task_id": "war_room",
@@ -873,7 +873,7 @@
       "responder_cumulative_reward": -0.31,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 2
+      "wall_ms": 0
     },
     {
       "task_id": "war_room",
@@ -894,7 +894,7 @@
       "responder_cumulative_reward": -0.17,
       "drift_events_n": 0,
       "steps": 15,
-      "wall_ms": 2
+      "wall_ms": 1
     },
     {
       "task_id": "drift_ops",
@@ -936,7 +936,7 @@
       "responder_cumulative_reward": -0.45,
       "drift_events_n": 2,
       "steps": 25,
-      "wall_ms": 2
+      "wall_ms": 3
     },
     {
       "task_id": "drift_ops",
@@ -999,7 +999,7 @@
       "responder_cumulative_reward": -0.58,
       "drift_events_n": 2,
       "steps": 25,
-      "wall_ms": 1
+      "wall_ms": 2
     },
     {
       "task_id": "drift_ops",
@@ -1041,7 +1041,7 @@
       "responder_cumulative_reward": -0.19,
       "drift_events_n": 2,
       "steps": 25,
-      "wall_ms": 0
+      "wall_ms": 2
     },
     {
       "task_id": "drift_ops",
@@ -1062,7 +1062,7 @@
       "responder_cumulative_reward": -0.23,
       "drift_events_n": 2,
       "steps": 25,
-      "wall_ms": 0
+      "wall_ms": 1
     },
     {
       "task_id": "drift_ops",
@@ -1083,7 +1083,7 @@
       "responder_cumulative_reward": -0.47,
       "drift_events_n": 0,
       "steps": 25,
-      "wall_ms": 0
+      "wall_ms": 2
     },
     {
       "task_id": "drift_ops",
@@ -1104,7 +1104,7 @@
       "responder_cumulative_reward": -0.62,
       "drift_events_n": 2,
       "steps": 25,
-      "wall_ms": 0
+      "wall_ms": 2
     }
   ]
 }

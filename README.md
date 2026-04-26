@@ -90,6 +90,7 @@ curl -X POST https://elliot89-sentinel.hf.space/live/oversee \
 | **Live demo** | First tab on the [HF Space](https://huggingface.co/spaces/Elliot89/sentinel) — paste an action, get a verdict, color-coded with a 0-1 risk gauge. |
 | **Endpoint** | `POST /live/oversee` (heuristic backend always works; trained Qwen3-1.7B used opportunistically when vLLM is reachable). |
 | **🛡️ Prompt-injection shield** | Detects 10 adversarial override patterns ("ignore previous instructions", `<\|im_start\|>`, etc) and force-escalates. |
+| **📋 Copy-as-agent-code** | New panel on the live tab: pick `curl` / `python (requests)` / `python (langchain)` and the snippet **auto-rebuilds from your inputs** so judges can paste it straight into an LLM agent and call the public Space over the Internet. |
 | **Lifetime stats** | `GET /live/stats` exposes per-decision, per-severity, p50/p99 latency, catastrophic-blocked, and shield-triggered counts since server start. |
 | **Demo script** | `python tools/agent_demo.py --use-mock-llm` runs a 5-step incident loop in 6 seconds, no API key. |
 | **Full docs** | [SENTINEL_LIVE.md](./SENTINEL_LIVE.md) |

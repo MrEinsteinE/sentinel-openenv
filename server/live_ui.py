@@ -5,11 +5,20 @@ Calls `live_oversee_logic()` in-process (no HTTP hop, sub-millisecond) so
 the demo works even if the FastAPI request layer is misbehaving.
 
 Public API (consumed by server/app.py via a single line):
-    build_live_tab()                -> gr.Blocks   # standalone Live tab
-    combine_with_live_tab(existing) -> gr.Blocks   # wrap the existing
-                                                    # replay viewer + Live
-                                                    # tab inside one Blocks
-                                                    # using gr.Tabs
+    build_live_tab()                  -> gr.Blocks   # standalone Live tab
+    combine_with_live_tab(populate)   -> gr.Blocks   # combines the Live tab
+                                                      # with an existing
+                                                      # replay-viewer
+                                                      # populator function
+                                                      # via gr.Tabs
+
+Important: the build helpers here use a *populator* pattern (functions that
+add components to the current Blocks/Tab context) rather than the older
+nested-Blocks-then-.render() pattern. Nesting `with gr.Blocks() as inner:`
+and then calling `inner.render()` inside another Blocks duplicates the
+container in some Gradio builds (the "Real-time Agent Oversight" header
+appearing twice on the Space was the symptom). Populators sidestep the
+issue entirely.
 
 Creative additions visible to judges
 ------------------------------------
@@ -24,10 +33,15 @@ Creative additions visible to judges
 4. Side-by-side decision / severity cards with color emoji prefixes
    (green / yellow / red / siren) so the verdict is unmistakable
    from across the room.
+5. **"📋 Copy as agent code" generator** — auto-rebuilds a cURL / Python
+   requests / LangChain BaseTool snippet from the user's current inputs
+   on every Submit click. Zero-friction integration: judges literally
+   paste the snippet into their own agent and it works.
 """
 from __future__ import annotations
 
-from typing import Any
+import json
+from typing import Any, Callable
 
 import gradio as gr
 
@@ -51,6 +65,10 @@ _SEVERITY_PREFIX = {
     "high":         "🟠 high",
     "catastrophic": "🔴 catastrophic",
 }
+
+# Public host the Space is exposed at — used in the copy-snippet generator
+# so the cURL/Python examples are paste-and-go from any external machine.
+_PUBLIC_BASE_URL = "https://elliot89-sentinel.hf.space"
 
 
 def _risk_bar(risk: float) -> str:
@@ -101,6 +119,124 @@ def _format_reasoning_md(trace: list[str]) -> str:
     return "\n".join(f"- {step}" for step in trace)
 
 
+# ── Copy-as-agent-code snippet generator (creative addition) ───────────────
+
+def _build_payload(
+    action_desc: str,
+    tool: str,
+    target: str,
+    context: str,
+    severity: str,
+    backend: str,
+) -> dict[str, Any]:
+    """Build the JSON request body that mirrors what the user typed."""
+    payload: dict[str, Any] = {
+        "action_description": (action_desc or "").strip() or "(describe action)",
+    }
+    if tool and tool.strip():
+        payload["proposed_tool"] = tool.strip()
+    if target and target.strip():
+        payload["proposed_target"] = target.strip()
+    if context and context.strip():
+        payload["context"] = context.strip()
+    if severity in {"low", "medium", "high", "critical"}:
+        payload["severity_hint"] = severity
+    if backend in {"heuristic", "trained"} and backend != "heuristic":
+        payload["backend"] = backend
+    return payload
+
+
+def _curl_snippet(payload: dict[str, Any]) -> str:
+    body_json = json.dumps(payload, indent=2)
+    return (
+        f"curl -X POST {_PUBLIC_BASE_URL}/live/oversee \\\n"
+        f"  -H 'Content-Type: application/json' \\\n"
+        f"  -d '{body_json}'"
+    )
+
+
+def _python_requests_snippet(payload: dict[str, Any]) -> str:
+    body = json.dumps(payload, indent=4)
+    indented_body = "\n".join("    " + ln for ln in body.splitlines())
+    lines = [
+        "import requests",
+        "",
+        "verdict = requests.post(",
+        f'    "{_PUBLIC_BASE_URL}/live/oversee",',
+        "    json=" + indented_body.lstrip() + ",",
+        "    timeout=10,",
+        ").json()",
+        "",
+        'if verdict["decision"] in ("block", "escalate"):',
+        "    raise RuntimeError(",
+        "        f\"SENTINEL refused: {verdict['justification']}\"",
+        "    )",
+    ]
+    return "\n".join(lines)
+
+
+def _langchain_snippet(payload: dict[str, Any]) -> str:
+    body = json.dumps(payload, indent=4)
+    lines = [
+        "from langchain.tools import BaseTool",
+        "import requests",
+        "",
+        "class SentinelGate(BaseTool):",
+        '    name = "sentinel_oversee"',
+        '    description = "Ask SENTINEL to approve/flag/block a proposed action."',
+        "",
+        "    def _run(self, action: str, **kwargs) -> str:",
+        '        payload = {"action_description": action, **kwargs}',
+        f'        v = requests.post("{_PUBLIC_BASE_URL}/live/oversee",',
+        "                          json=payload, timeout=10).json()",
+        '        if v["decision"] in ("block", "escalate"):',
+        "            return f\"REFUSED ({v['decision']}): {v['justification']}\"",
+        "        return f\"OK ({v['decision']}): {v['justification']}\"",
+        "",
+        "# Pre-baked example — same fields you typed in the UI:",
+        f"verdict = SentinelGate()._run(**{body})",
+    ]
+    return "\n".join(lines)
+
+
+_SNIPPET_BUILDERS: dict[str, tuple[Callable[[dict[str, Any]], str], str]] = {
+    "curl":               (_curl_snippet,            "shell"),
+    "python (requests)":  (_python_requests_snippet, "python"),
+    "python (langchain)": (_langchain_snippet,       "python"),
+}
+
+
+def _render_snippet(
+    flavor: str,
+    action_desc: str,
+    tool: str,
+    target: str,
+    context: str,
+    severity: str,
+    backend: str,
+) -> tuple[str, str]:
+    """Returns (snippet_text, gradio_language_tag) for the chosen flavor."""
+    builder, lang = _SNIPPET_BUILDERS.get(flavor, _SNIPPET_BUILDERS["curl"])
+    payload = _build_payload(action_desc, tool, target, context, severity, backend)
+    return builder(payload), lang
+
+
+def _refresh_snippet_only(
+    flavor: str,
+    action_desc: str,
+    tool: str,
+    target: str,
+    context: str,
+    severity: str,
+    backend: str,
+) -> gr.Code:
+    """Used when the user toggles the snippet flavor radio."""
+    snippet, lang = _render_snippet(
+        flavor, action_desc, tool, target, context, severity, backend,
+    )
+    return gr.Code(value=snippet, language=lang, interactive=False)
+
+
 # ── The Gradio adapter — what `submit.click` calls ─────────────────────────
 
 def run_live_oversight(
@@ -110,13 +246,17 @@ def run_live_oversight(
     context: str,
     severity: str,
     backend: str,
-) -> tuple[str, str, str, str, str, str]:
+    snippet_flavor: str,
+) -> tuple[str, str, str, str, str, str, gr.Code]:
     """Adapter: builds a request, calls live_oversee_logic, formats outputs.
 
     Returns (decision_md, severity_md, justification, reasoning_md,
-             latency_str, stats_md).
+             latency_str, stats_md, snippet_code).
     """
     if not (action_desc and action_desc.strip()):
+        snippet, lang = _render_snippet(
+            snippet_flavor, action_desc, tool, target, context, severity, backend,
+        )
         return (
             "⚠️ no action provided",
             "—",
@@ -124,6 +264,7 @@ def run_live_oversight(
             "",
             "",
             _format_stats_md(get_live_stats_snapshot()),
+            gr.Code(value=snippet, language=lang, interactive=False),
         )
 
     sev_hint = severity if severity in {"low", "medium", "high", "critical"} else None
@@ -151,6 +292,9 @@ def run_live_oversight(
         f"⏱ {resp.latency_ms} ms · backend = `{resp.backend_used}` · "
         f"confidence = {resp.confidence:.2f}"
     )
+    snippet, lang = _render_snippet(
+        snippet_flavor, action_desc, tool, target, context, severity, backend,
+    )
     return (
         decision_md,
         severity_md,
@@ -158,10 +302,11 @@ def run_live_oversight(
         _format_reasoning_md(resp.reasoning_trace),
         latency_str,
         _format_stats_md(get_live_stats_snapshot()),
+        gr.Code(value=snippet, language=lang, interactive=False),
     )
 
 
-# ── Live tab Blocks ────────────────────────────────────────────────────────
+# ── Live tab populator (the canonical implementation) ──────────────────────
 
 _CSS = """
 .live-card { padding: 14px 18px; border-radius: 10px;
@@ -204,132 +349,175 @@ _ADVERSARIAL_EXAMPLES = [
 ]
 
 
-def build_live_tab() -> gr.Blocks:
-    """Standalone Blocks for the SENTINEL/Live demo. Mountable at /live too."""
+def _populate_live_ui() -> None:
+    """Render every Live Oversight Demo component into the *current* Gradio
+    context (whatever Blocks / Tab is currently active in the `with` stack).
+
+    This is the canonical implementation. `build_live_tab()` and
+    `combine_with_live_tab()` both delegate here to avoid duplicating the
+    UI when nested in other Blocks.
+    """
     initial_stats = _format_stats_md(get_live_stats_snapshot())
 
-    with gr.Blocks(css=_CSS, title="SENTINEL / Live") as live_tab:
+    gr.Markdown(
+        "# 🛡️ SENTINEL / Live — Real-time Agent Oversight\n\n"
+        "Paste any proposed agent action. SENTINEL evaluates it against "
+        "trained safety policies and returns **approve / flag / block / "
+        "escalate** with a justification — in real time, with no scenario "
+        "context required. Use this from any LLM agent framework "
+        "(LangChain, AutoGen, OpenAI tool-use loops) by POSTing to "
+        "`/live/oversee`.\n\n"
+        "*This panel calls the same `live_oversee_logic()` function in-process — "
+        "the verdict you see on screen is byte-for-byte what the HTTP API returns.*"
+    )
+
+    stats_md = gr.Markdown(initial_stats, elem_classes=["live-stats"])
+
+    with gr.Row():
+        with gr.Column(scale=2):
+            action_desc = gr.Textbox(
+                label="Proposed action (free-form)", lines=3,
+                placeholder=("e.g. 'Roll back the postgres-prod deployment "
+                              "to v2.1 because checkout is failing'"),
+            )
+            with gr.Row():
+                tool = gr.Textbox(label="Tool / command", scale=1,
+                                   placeholder="kubectl rollout undo")
+                target = gr.Textbox(label="Target service", scale=1,
+                                     placeholder="postgres-prod-primary")
+            context = gr.Textbox(
+                label="Incident context (optional)", lines=2,
+                placeholder=("postgres-prod is in a crash loop. checkout-service "
+                              "is failing 80% of requests."),
+            )
+            severity = gr.Dropdown(
+                label="Severity hint",
+                choices=["low", "medium", "high", "critical"],
+                value="medium",
+            )
+            backend = gr.Radio(
+                label="Overseer backend",
+                choices=["heuristic", "trained"],
+                value="heuristic",
+                info=("'trained' uses Qwen3-1.7B via vLLM if available — "
+                      "silently falls back to heuristic otherwise."),
+            )
+            submit = gr.Button("▶️ Run through SENTINEL Overseer",
+                                variant="primary", size="lg")
+            refresh = gr.Button("🔄 Refresh stats", size="sm")
+
+        with gr.Column(scale=3):
+            gr.Markdown("### Verdict")
+            decision_out = gr.Markdown("_(awaiting input)_",
+                                        elem_classes=["live-card"])
+            severity_out = gr.Markdown("_(awaiting input)_")
+            justification_out = gr.Textbox(
+                label="Justification", lines=3, interactive=False,
+            )
+            gr.Markdown("### Reasoning trace")
+            reasoning_out = gr.Markdown("_(no trace yet)_")
+            latency_out = gr.Markdown("_(no latency yet)_")
+
+    with gr.Accordion("✨ Pre-loaded examples — click to load + run",
+                       open=True):
         gr.Markdown(
-            "# 🛡️ SENTINEL / Live — Real-time Agent Oversight\n\n"
-            "Paste any proposed agent action. SENTINEL evaluates it against "
-            "trained safety policies and returns **approve / flag / block / "
-            "escalate** with a justification — in real time, with no scenario "
-            "context required. Use this from any LLM agent framework "
-            "(LangChain, AutoGen, OpenAI tool-use loops) by POSTing to "
-            "`/live/oversee`.\n\n"
-            "*This panel calls the same `live_oversee_logic()` function in-process — "
-            "the verdict you see on screen is byte-for-byte what the HTTP API returns.*"
-        )
-
-        stats_md = gr.Markdown(initial_stats, elem_classes=["live-stats"])
-
-        with gr.Row():
-            with gr.Column(scale=2):
-                action_desc = gr.Textbox(
-                    label="Proposed action (free-form)", lines=3,
-                    placeholder=("e.g. 'Roll back the postgres-prod deployment "
-                                  "to v2.1 because checkout is failing'"),
-                )
-                with gr.Row():
-                    tool = gr.Textbox(label="Tool / command", scale=1,
-                                       placeholder="kubectl rollout undo")
-                    target = gr.Textbox(label="Target service", scale=1,
-                                         placeholder="postgres-prod-primary")
-                context = gr.Textbox(
-                    label="Incident context (optional)", lines=2,
-                    placeholder=("postgres-prod is in a crash loop. checkout-service "
-                                  "is failing 80% of requests."),
-                )
-                severity = gr.Dropdown(
-                    label="Severity hint",
-                    choices=["low", "medium", "high", "critical"],
-                    value="medium",
-                )
-                backend = gr.Radio(
-                    label="Overseer backend",
-                    choices=["heuristic", "trained"],
-                    value="heuristic",
-                    info=("'trained' uses Qwen3-1.7B via vLLM if available — "
-                          "silently falls back to heuristic otherwise."),
-                )
-                submit = gr.Button("▶️ Run through SENTINEL Overseer",
-                                    variant="primary", size="lg")
-                refresh = gr.Button("🔄 Refresh stats", size="sm")
-
-            with gr.Column(scale=3):
-                gr.Markdown("### Verdict")
-                decision_out = gr.Markdown("_(awaiting input)_",
-                                            elem_classes=["live-card"])
-                severity_out = gr.Markdown("_(awaiting input)_")
-                justification_out = gr.Textbox(
-                    label="Justification", lines=3, interactive=False,
-                )
-                gr.Markdown("### Reasoning trace")
-                reasoning_out = gr.Markdown("_(no trace yet)_")
-                latency_out = gr.Markdown("_(no latency yet)_")
-
-        with gr.Accordion("✨ Pre-loaded examples — click to load + run",
-                           open=True):
-            gr.Markdown(
-                "**Standard cases** — destructive verbs, prod targets, diagnostics:")
-            gr.Examples(
-                examples=_BENIGN_EXAMPLES,
-                inputs=[action_desc, tool, target, context, severity, backend],
-                cache_examples=False,
-                label="benign examples",
-            )
-            gr.Markdown(
-                "**🛡️ Adversarial / prompt-injection attempts** — these "
-                "should all `🚨 ESCALATE` with `shield_triggered=true`:")
-            gr.Examples(
-                examples=_ADVERSARIAL_EXAMPLES,
-                inputs=[action_desc, tool, target, context, severity, backend],
-                cache_examples=False,
-                label="adversarial examples",
-            )
-
-        with gr.Accordion("🧪 Wire it into your agent (3-line snippets)",
-                           open=False):
-            gr.Markdown(
-                "**Python (any agent framework):**\n"
-                "```python\n"
-                "import requests\n"
-                "verdict = requests.post('http://localhost:7860/live/oversee',\n"
-                "                         json={'action_description': proposed_action,\n"
-                "                               'proposed_tool': tool, 'proposed_target': target,\n"
-                "                               'severity_hint': severity}).json()\n"
-                "if verdict['decision'] in ('block', 'escalate'):\n"
-                "    raise SafetyAbort(verdict['justification'])\n"
-                "```\n"
-                "**curl:**\n"
-                "```bash\n"
-                "curl -X POST http://localhost:7860/live/oversee \\\n"
-                "  -H 'Content-Type: application/json' \\\n"
-                "  -d '{\"action_description\":\"DROP TABLE users\","
-                "\"proposed_target\":\"users\",\"severity_hint\":\"critical\"}'\n"
-                "```"
-            )
-
-        outputs = [decision_out, severity_out, justification_out,
-                   reasoning_out, latency_out, stats_md]
-        submit.click(
-            fn=run_live_oversight,
+            "**Standard cases** — destructive verbs, prod targets, diagnostics:")
+        gr.Examples(
+            examples=_BENIGN_EXAMPLES,
             inputs=[action_desc, tool, target, context, severity, backend],
-            outputs=outputs,
+            cache_examples=False,
+            label="benign examples",
         )
-        refresh.click(
-            fn=lambda: _format_stats_md(get_live_stats_snapshot()),
-            inputs=None,
-            outputs=stats_md,
+        gr.Markdown(
+            "**🛡️ Adversarial / prompt-injection attempts** — these "
+            "should all `🚨 ESCALATE` with `shield_triggered=true`:")
+        gr.Examples(
+            examples=_ADVERSARIAL_EXAMPLES,
+            inputs=[action_desc, tool, target, context, severity, backend],
+            cache_examples=False,
+            label="adversarial examples",
         )
 
+    with gr.Accordion("📋 Copy as agent code — auto-fills with your inputs",
+                       open=False):
+        gr.Markdown(
+            "Type or pick an example above, click **Run** once, then come back "
+            "here. The snippet below mirrors your inputs **byte-for-byte** so "
+            "you can paste it straight into your own agent code and call the "
+            "**same public endpoint** (`{_PUBLIC_BASE_URL}/live/oversee`) over "
+            "the Internet.".replace("{_PUBLIC_BASE_URL}", _PUBLIC_BASE_URL)
+        )
+        snippet_flavor = gr.Radio(
+            label="Snippet flavor",
+            choices=["curl", "python (requests)", "python (langchain)"],
+            value="curl",
+            info="Switch flavors any time — the snippet rebuilds instantly.",
+        )
+        initial_snippet, initial_lang = _render_snippet(
+            "curl", "", "", "", "", "medium", "heuristic",
+        )
+        snippet_out = gr.Code(
+            value=initial_snippet,
+            language=initial_lang,
+            label="Copy this into your agent (uses the public HF Space URL)",
+            interactive=False,
+        )
+
+    inputs_for_submit = [action_desc, tool, target, context,
+                          severity, backend, snippet_flavor]
+    outputs_for_submit = [decision_out, severity_out, justification_out,
+                           reasoning_out, latency_out, stats_md, snippet_out]
+    submit.click(
+        fn=run_live_oversight,
+        inputs=inputs_for_submit,
+        outputs=outputs_for_submit,
+    )
+    refresh.click(
+        fn=lambda: _format_stats_md(get_live_stats_snapshot()),
+        inputs=None,
+        outputs=stats_md,
+    )
+    snippet_flavor.change(
+        fn=_refresh_snippet_only,
+        inputs=[snippet_flavor, action_desc, tool, target,
+                context, severity, backend],
+        outputs=[snippet_out],
+    )
+
+
+# ── Public builders ────────────────────────────────────────────────────────
+
+def build_live_tab() -> gr.Blocks:
+    """Standalone Blocks for the SENTINEL/Live demo. Mountable at /live too.
+
+    Thin wrapper around `_populate_live_ui()` — all the real work is the
+    populator. This Blocks is what you'd use if you wanted ONLY the live
+    UI (e.g. mounted directly at /live without the replay viewer).
+    """
+    with gr.Blocks(css=_CSS, title="SENTINEL / Live") as live_tab:
+        _populate_live_ui()
     return live_tab
 
 
-def combine_with_live_tab(existing_demo: gr.Blocks) -> gr.Blocks:
-    """Wrap the existing replay-viewer Blocks AND the Live tab inside one
-    Blocks using gr.Tabs. The Live tab goes FIRST — that's the headline
-    feature judges should see when they hit the iframe.
+def combine_with_live_tab(
+    populate_replay_viewer: Callable[[], None],
+) -> gr.Blocks:
+    """Build a single combined Blocks containing two tabs:
+
+      Tab 1 — 🛡️ Live Oversight Demo (the *headline* feature)
+      Tab 2 — 📼 Replay Viewer (the original 3-column trace viewer)
+
+    `populate_replay_viewer` is a parameter-less callable that, when
+    invoked inside a Gradio context, adds the replay viewer's components
+    to the current context. Caller (server/app.py) provides this via
+    a small helper that wraps the existing replay-viewer construction.
+
+    The populator pattern (vs the older `existing_demo.render()` pattern)
+    is what fixes the duplicated "Real-time Agent Oversight" header bug:
+    nesting `with gr.Blocks() as inner:` inside another Blocks and then
+    calling `inner.render()` causes some Gradio builds to render the
+    inner container *twice*. Calling a populator inside `gr.Tab(...)`
+    is the canonical idiom and renders exactly once.
     """
     with gr.Blocks(
         title="SENTINEL — Scalable Oversight OpenEnv",
@@ -341,7 +529,7 @@ def combine_with_live_tab(existing_demo: gr.Blocks) -> gr.Blocks:
     ) as combined:
         with gr.Tabs():
             with gr.Tab("🛡️ Live Oversight Demo (NEW)"):
-                build_live_tab().render()
+                _populate_live_ui()
             with gr.Tab("📼 Replay Viewer (3-column)"):
-                existing_demo.render()
+                populate_replay_viewer()
     return combined

@@ -383,58 +383,72 @@ CUSTOM_CSS = """
 """
 
 
+def _populate_replay_viewer_ui() -> None:
+    """Render every Replay Viewer component into the *current* Gradio context.
+
+    Split out from `_build_gradio_ui()` so it can be called directly from
+    inside `gr.Tab(...)` by `combine_with_live_tab()` — the populator pattern
+    avoids the duplicated-container Gradio quirk that nested `Blocks.render()`
+    triggers.
+    """
+    gr.HTML("""
+    <div class="env-header">
+        <span class="env-header-left">🛡️ SENTINEL — Scalable LLM Oversight</span>
+        <span class="env-header-right">OpenEnv · v0.1.0</span>
+    </div>
+    """)
+    gr.Markdown(
+        "**A multi-agent OpenEnv**: Responder proposes actions, Overseer decides whether to approve, "
+        "flag, block, or escalate each one. Toggle between an *untrained* and a *trained-heuristic* "
+        "Overseer to see the contrast this environment is designed to produce through training."
+    )
+    with gr.Row():
+        with gr.Column(scale=1):
+            gr.HTML('<div class="section-title">Episode Setup</div>')
+            task_dd = gr.Dropdown(
+                choices=[("🟢 Easy — Action Screen", "action_screen"),
+                         ("🟡 Medium — War Room", "war_room"),
+                         ("🔴 Hard — Drift Ops", "drift_ops")],
+                value="war_room", label="Task")
+            seed_tb = gr.Textbox(label="Seed", value="42")
+            style_dd = gr.Dropdown(
+                choices=[("🔴 Untrained Overseer", "untrained"),
+                         ("🟢 Trained-Heuristic Overseer", "trained")],
+                value="trained", label="Overseer Style")
+            play_btn = gr.Button("▶️ Play Episode", variant="primary", size="lg")
+            gr.Markdown("*Plays one full episode with a heuristic Responder and the selected Overseer.*")
+            gr.HTML('<div class="section-title">Reward Trajectory</div>')
+            reward_json = gr.Textbox(label="Reward series (steps → cumulative Overseer reward)", lines=6)
+
+        with gr.Column(scale=2):
+            gr.HTML('<div class="section-title">Incident</div>')
+            incident_md = gr.Markdown("*Play an episode to start.*")
+            gr.HTML('<div class="section-title">Transcript (Responder → Overseer → World)</div>')
+            transcript_md = gr.Markdown("*No episode yet.*")
+            gr.HTML('<div class="section-title">Final Metrics</div>')
+            metrics_md = gr.Markdown("*No episode yet.*")
+
+    play_btn.click(fn=_play_one_episode,
+                   inputs=[task_dd, seed_tb, style_dd],
+                   outputs=[incident_md, transcript_md, metrics_md, reward_json])
+
+
 def _build_gradio_ui() -> gr.Blocks:
+    """Standalone replay viewer Blocks. Kept for backward compatibility but
+    no longer used by the mount path — see `_populate_replay_viewer_ui` and
+    `combine_with_live_tab(_populate_replay_viewer_ui)` below.
+    """
     with gr.Blocks(
         title="SENTINEL — Scalable Oversight OpenEnv",
         css=CUSTOM_CSS,
         theme=gr.themes.Soft(primary_hue="blue", neutral_hue="slate",
                              font=gr.themes.GoogleFont("Inter")),
     ) as demo:
-        gr.HTML("""
-        <div class="env-header">
-            <span class="env-header-left">🛡️ SENTINEL — Scalable LLM Oversight</span>
-            <span class="env-header-right">OpenEnv · v0.1.0</span>
-        </div>
-        """)
-        gr.Markdown(
-            "**A multi-agent OpenEnv**: Responder proposes actions, Overseer decides whether to approve, "
-            "flag, block, or escalate each one. Toggle between an *untrained* and a *trained-heuristic* "
-            "Overseer to see the contrast this environment is designed to produce through training."
-        )
-        with gr.Row():
-            with gr.Column(scale=1):
-                gr.HTML('<div class="section-title">Episode Setup</div>')
-                task_dd = gr.Dropdown(
-                    choices=[("🟢 Easy — Action Screen", "action_screen"),
-                             ("🟡 Medium — War Room", "war_room"),
-                             ("🔴 Hard — Drift Ops", "drift_ops")],
-                    value="war_room", label="Task")
-                seed_tb = gr.Textbox(label="Seed", value="42")
-                style_dd = gr.Dropdown(
-                    choices=[("🔴 Untrained Overseer", "untrained"),
-                             ("🟢 Trained-Heuristic Overseer", "trained")],
-                    value="trained", label="Overseer Style")
-                play_btn = gr.Button("▶️ Play Episode", variant="primary", size="lg")
-                gr.Markdown("*Plays one full episode with a heuristic Responder and the selected Overseer.*")
-                gr.HTML('<div class="section-title">Reward Trajectory</div>')
-                reward_json = gr.Textbox(label="Reward series (steps → cumulative Overseer reward)", lines=6)
-
-            with gr.Column(scale=2):
-                gr.HTML('<div class="section-title">Incident</div>')
-                incident_md = gr.Markdown("*Play an episode to start.*")
-                gr.HTML('<div class="section-title">Transcript (Responder → Overseer → World)</div>')
-                transcript_md = gr.Markdown("*No episode yet.*")
-                gr.HTML('<div class="section-title">Final Metrics</div>')
-                metrics_md = gr.Markdown("*No episode yet.*")
-
-        play_btn.click(fn=_play_one_episode,
-                       inputs=[task_dd, seed_tb, style_dd],
-                       outputs=[incident_md, transcript_md, metrics_md, reward_json])
-
+        _populate_replay_viewer_ui()
     return demo
 
 
-_gradio_demo = __import__('server.live_ui', fromlist=['combine_with_live_tab']).combine_with_live_tab(_build_gradio_ui())
+_gradio_demo = __import__('server.live_ui', fromlist=['combine_with_live_tab']).combine_with_live_tab(_populate_replay_viewer_ui)
 # Mount Gradio at the root path. HF Spaces iframes the root URL of the
 # container (app_port is 7860) so this is what the Spaces wrapper hits.
 # The OpenEnv CLI injects `base_path: /web` into the README frontmatter;

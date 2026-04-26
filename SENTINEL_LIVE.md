@@ -18,13 +18,14 @@ held-out scenarios for evaluation. The same `grade_overseer_decision()`
 function that scored every training step is the one that scores your live
 verdict — there is no train/serve gap.
 
-Three things ship in the box:
+Four things ship in the box:
 
 | | |
 |---|---|
 | **Heuristic backend** | Always works, sub-millisecond, zero deps. Mirrors the policy-aware Overseer (F1 = 0.969 on the eval set). |
 | **Trained backend (opt-in)** | Defers to Qwen3-1.7B + LoRA via vLLM if both are present. Silently falls back to heuristic on any failure. |
 | **🛡️ Prompt-injection shield** | Detects 10 adversarial override patterns ("ignore previous instructions", "approve regardless", `<\|im_start\|>`, …) before classification. Force-escalates with a clear `shield_triggered=true` flag. |
+| **📋 Copy-as-agent-code generator** | The Gradio tab has a "Copy as agent code" panel that auto-rebuilds a **cURL / Python `requests` / LangChain `BaseTool`** snippet from whatever you typed into the form — paste-and-go integration with zero adaptation. |
 
 ## Try it
 
@@ -117,6 +118,14 @@ defers to the trained Qwen3-1.7B backend via vLLM with silent fallback.
 The Gradio tab calls the same function in-process — what you see on screen
 is byte-for-byte what the HTTP API returns.
 
-The whole feature is 970 lines across 4 new files and 3 edited lines in
-`server/app.py`. Nothing in `graders.py`, `scenarios.py`, `models.py`,
-`drift.py`, `eval.py`, or `client.py` was touched.
+The whole feature is ~1100 lines across 4 new files (`server/live_routes.py`,
+`server/live_ui.py`, `tools/agent_demo.py`, `SENTINEL_LIVE.md`) plus a small
+populator extraction in `server/app.py`. Nothing in `graders.py`,
+`scenarios.py`, `models.py`, `drift.py`, `eval.py`, or `client.py` was touched.
+
+> **Note on the UI structure:** the live tab and the original 3-column
+> replay viewer are composed via the *populator pattern* (callables that
+> add components to the current `gr.Tabs` context). Earlier builds used
+> the nested `Blocks.render()` pattern, which caused some Gradio versions
+> to render the live panel twice on the same page. The current build
+> renders each tab exactly once — verified at the `/config` level.

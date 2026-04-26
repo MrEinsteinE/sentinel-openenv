@@ -103,7 +103,10 @@ Three reset modes select who controls which agent:
 | `drift.py` | Schema drift: `should_trigger()`, `apply_mutations()`, `describe_drift_for_overseer()` |
 | `graders.py` | `classify_proposal()` returns `(class, severity_weight)`; `grade_overseer_decision()` returns shaped + binary rewards; `compute_f1()` |
 | `server/environment.py` | `SentinelEnvironment` — the core multi-agent loop, session management |
-| `server/app.py` | FastAPI endpoints + Gradio 3-column replay viewer |
+| `server/app.py` | FastAPI endpoints + the Gradio root mount. Owns `_populate_replay_viewer_ui()` — the **populator function** for the 3-column replay viewer (called inside `gr.Tab(...)` by `combine_with_live_tab`). |
+| `server/live_routes.py` | **SENTINEL/Live** — `/live/oversee` POST endpoint, `/live/stats`, `/live/health`. Owns `live_oversee_logic()` (pure function called from both the route handler and the Gradio tab in-process), the prompt-injection shield (10 regex patterns), and the synthetic-scenario builder that lets us reuse `grade_overseer_decision()` without scenario state. |
+| `server/live_ui.py` | Gradio "Live Oversight Demo" tab. Exposes `_populate_live_ui()` (populator pattern — adds components to current Gradio context, NEVER its own `gr.Blocks`), `build_live_tab()` (standalone wrapper), and `combine_with_live_tab(populate_replay_fn)` which composes the two tabs. The populator pattern was a deliberate fix for a duplication bug where nested `Blocks.render()` rendered the live panel twice on the page on some Gradio versions. |
+| `tools/agent_demo.py` | Judge-runnable demo: `--use-mock-llm` runs a 5-step incident with a hardcoded LLM, blocks ≥ 1 catastrophic action, prints `/live/stats` summary at the end. |
 | `client.py` | `SentinelEnv(EnvClient)` — typed HTTP client for use in training scripts |
 | `eval.py` | Baseline harness — `random`, `naive`, `policy_aware`, `llm` overseers |
 | `training/grpo_hf_job.py` | HF Jobs entry point with PEP 723 inline deps; pinned to PyTorch 2.6+/Unsloth 2026.4.4/TRL 0.21. Owns the auto-abort logic (`STEP100_MIN_REWARD`, `STEP200_MIN_REWARD`) that falls back to the SFT-only checkpoint if GRPO underperforms. |
@@ -142,6 +145,14 @@ Justification scoring is length-capped (saturates at 20 words) and requires grou
 **Stage B — Rejection Fine-Tuning** (`Elliot89/sentinel-rft-v1`, 321 samples): SFT on curated TP/TN trajectories from the policy-aware heuristic. Teaches JSON format + evidence-grounded justifications.
 
 **Stage C — Curriculum GRPO** (up to 400 steps, all 3 tiers): full GRPO across task tiers with uniform task sampling. **Has auto-abort:** if mean binary reward at step 100 < `STEP100_MIN_REWARD` or step 200 < `STEP200_MIN_REWARD`, the runner publishes the Stage B checkpoint instead. The current published checkpoint (`Elliot89/sentinel-overseer-qwen3-1.7b`, **micro-F1 = 0.969** from `eval_data/baseline_qwen3_1_7b_trained.json`) hit `abort_path = "step200_sft_only"` — i.e. GRPO ran 200 steps but did not exceed the SFT baseline by the configured margin, so the SFT model was kept. Treat the published F1 as an SFT-headline number, not a GRPO win, until a future GRPO run survives the abort. The GRPO400 follow-up that ignored the abort (run_summary.json reflects this, model on Hub as `Elliot89/sentinel-overseer-qwen3-1.7b-grpo400`) regressed to F1 = 0.934 — the abort was correct.
+
+## SENTINEL/Live (the public oversight API)
+
+`POST /live/oversee` exposes the trained Overseer as a generic safety check any LLM agent can call. Implementation lives in `server/live_routes.py` (route + Pydantic models + classifier) and `server/live_ui.py` (Gradio tab + the new "Copy as agent code" snippet generator). See `SENTINEL_LIVE.md` for the response schema and integration recipes.
+
+**Gradio UI composition:** `server/live_ui.py:combine_with_live_tab(populate_replay_fn)` builds the combined two-tab Blocks. It uses the **populator pattern** — each `gr.Tab(...)` body calls a `_populate_*_ui()` function that adds components to the current context. Do NOT switch back to the older nested-`Blocks.render()` pattern: on Gradio 5.50+ it caused the live panel's "Real-time Agent Oversight" header to render twice on the page. The fix is verified at the `/config` endpoint level (each header text appears exactly once in the served component tree).
+
+**Cleanup script:** `scripts/hf_post_push_cleanup.py` (called by `scripts/deploy_hf.sh`) is a standalone Python script. The cleanup logic was previously embedded as bash heredocs (`python - <<PY ... PY`); on Git Bash for Windows the heredoc parser tripped on a colon-suffixed string literal and crashed before frontmatter strip + bloat folder deletion ran. Now it's a plain `python scripts/hf_post_push_cleanup.py --repo-id ...` invocation that runs identically on bash, dash, Git Bash, and PowerShell.
 
 ## Deployment notes
 
