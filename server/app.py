@@ -39,6 +39,7 @@ from models import (
 )
 from scenarios import EVAL_SEEDS_BY_TASK, TASKS, list_tasks
 from server.environment import SentinelEnvironment
+from server.live_routes import router as live_router
 
 
 _env: SentinelEnvironment | None = None
@@ -73,6 +74,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(live_router, prefix="/live", tags=["live"])
 
 
 # ── HTTP endpoints ─────────────────────────────────────────────────────────

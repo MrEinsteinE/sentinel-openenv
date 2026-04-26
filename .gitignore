@@ -30,3 +30,5 @@ training/.ipynb_checkpoints/
 training/unsloth_compiled_cache/
 
 .DS_Store
+.uvicorn.out
+.uvicorn.err
