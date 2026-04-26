@@ -77,9 +77,12 @@ Colab disconnects mid-run more often than not. Cells 9, 13, 14 have **idempotenc
 | Error you saw | Cell | Cause | Fix |
 |---|---|---|---|
 | `numpy.dtype size changed ... Expected 96 from C header, got 88 from PyObject` | 9 | Older Cell 3 had `numpy<2.0`, conflicting with Colab's pre-built torch wheels (built against numpy 2.x). **Fixed in Cell 3** (`numpy>=1.26`). | Restart session, run from Cell 2. |
-| `Could not load libtorchcodec` / `undefined symbol: ...c10_cuda_check_implementation` | 9 | Colab's pre-installed `torchcodec` was compiled against torch 2.5; our torch 2.7 upgrade breaks the C10 CUDA ABI. `transformers.processing_utils` hard-imports `torchcodec`. **Fixed in Cell 3** — we uninstall `torchcodec` / `torchaudio` / `torchvision` after the main install. | Restart session, run from Cell 2. |
+| `Could not load libtorchcodec` / `undefined symbol: ...c10_cuda_check_implementation` | 9 | Colab's pre-installed `torchcodec` was compiled against torch 2.5; our torch 2.7 upgrade breaks the C10 CUDA ABI. `transformers.processing_utils` hard-imports `torchcodec`. **Fixed in Cell 3** — we uninstall `torchcodec` after the main install. | Restart session, run from Cell 2. |
 | `Unsloth: Please install vLLM before enabling fast_inference!` | 9 | Cell 3's vLLM install silently failed. **Fixed in Cell 9** — auto-falls-back to non-vLLM mode. | No action — training continues, just slower. |
+| `vllm 0.9.2 requires torchaudio==2.7.0, which is not installed` | 3 | Earlier we uninstalled `torchaudio` along with `torchcodec`, breaking vLLM's hard dep. **Fixed in Cell 3** — we now re-install matched `torchaudio==2.7.0` + `torchvision==0.22.0` after the uninstall. | No action — pip warning is gone. |
+| `'OutStream' object has no attribute 'watch_fd_thread'` → `ImportError: critical package 'unsloth'` | 3 / 9 | `unsloth_zoo`'s tqdm/Inductor patcher reads `sys.stdout.watch_fd_thread`; older Colab `ipykernel` doesn't have that attribute. **Fixed by deferring unsloth's import to Cell 9** (Cell 3 only does `find_spec`) and adding a no-op `watch_fd_thread` shim at the top of Cell 9. | Restart session, run from Cell 2. The patch is idempotent. |
 | `ValueError: 'aimv2' is already used by a Transformers config` | 9 | `transformers>=4.50` natively registers `aimv2`; `unsloth_zoo==2026.4.4` re-registers it without `exist_ok=True`. **Fixed in Cell 9** — one-shot monkeypatch on `_LazyConfigMapping.register`. | Restart session, run from Cell 2. The patch is idempotent. |
+| `WARNING:torchao:Skipping import of cpp extensions due to incompatible torch version` | 3 | `torchao==0.17.0` (matches the production HF Jobs pin) wants torch ≥ 2.11; our torch is 2.7. cpp extensions are skipped, Python fallbacks run. | **No action — benign.** Quantization is slightly slower, but everything works. |
 | `SENTINEL not reachable at https://elliot89-sentinel.hf.space` | 7 | Public Space cold-starting (~60–90 s). | Re-run Cell 7. The 18×5 s poll inside `warmup_sentinel` will catch it. |
 | `step100_resft` after Cell 18 | 18 | Mean reward at step 100 < 0.05 — model can't learn from current SFT init. | Re-run Cell 14 with `epochs=3`, then re-run Cell 18. |
 | `step200_sft_only` after Cell 18 | 18 | GRPO underperforms SFT — auto-abort kept the SFT-only checkpoint. | **Not a bug.** Skip to Cell 20; the SFT model is your final. |
@@ -146,47 +149,73 @@ CELL3_INSTALL = """\
 # as args. We verify via importlib below and auto-fall-back if needed.
 %pip install --quiet 'vllm==0.9.2'
 
-# Defuse Colab's pre-installed torch* companion wheels. These were compiled
-# against Colab's older torch (2.5.x) and break with C10 CUDA ABI errors after
-# our torch==2.7 upgrade above. The most common one to bite is torchcodec —
-# transformers.processing_utils transitively imports transformers.video_utils,
-# which hard-imports torchcodec at module load. SENTINEL is text-only so we
-# don't need any of these.
+# Defuse Colab's pre-installed torch* companion wheels — they were compiled
+# against torch 2.5.x and break with C10 CUDA ABI errors after our torch==2.7
+# upgrade above. The most common one to bite is torchcodec, which
+# transformers.processing_utils transitively imports via video_utils.
+# SENTINEL is text-only so we don't need any of these at runtime.
 %pip uninstall --quiet -y torchcodec torchaudio torchvision 2>/dev/null
 
+# But vllm 0.9.2 hard-declares torchaudio==2.7.0 in its install_requires, so
+# pip's resolver complains if it's missing. Re-install MATCHED torchaudio +
+# torchvision (compiled against torch 2.7.0, so no ABI mismatch). We don't
+# re-install torchcodec — transformers handles its absence gracefully and
+# we'd just hit the C10 ABI error all over again.
+%pip install --quiet 'torchaudio==2.7.0' 'torchvision==0.22.0'
+
 # ── Post-install verification (must run before Cell 9) ─────────────────────
+# CRITICAL: do NOT actually import unsloth or vllm here. Their imports have
+# side effects:
+#   • unsloth touches sys.stdout.watch_fd_thread (older Colab ipykernel
+#     doesn't have it → AttributeError before our Cell 9 monkeypatch fires).
+#   • unsloth also patches transformers — we want this to happen BEFORE
+#     transformers is imported (otherwise its "should be imported before
+#     transformers" warning fires and some optimisations don't apply).
+#   • vllm's first import is multi-second and we already auto-fallback in Cell 9.
+# Just verify they're installed via find_spec; defer the actual import to
+# Cell 9, which applies the necessary monkeypatches first.
 import importlib, importlib.util, os
 
 print('✓ deps installed; verifying critical imports …')
 
-def _check(name, *, fallback_env=None, fallback_msg='', fatal=False):
-    \"\"\"Return True if `name` is importable. On failure, optionally set an env
-    var so downstream cells fall back gracefully.\"\"\"
+def _check(name, *, fallback_env=None, fallback_msg='', fatal=False, lite=False):
+    \"\"\"Return True if `name` resolves. If lite=True, only check find_spec
+    (no actual import). If fatal=True and missing, raise ImportError.\"\"\"
     spec = importlib.util.find_spec(name)
-    if spec is not None:
-        try:
-            mod = importlib.import_module(name)
-            ver = getattr(mod, '__version__', '?')
-            print(f'  ✓ {name:14s} {ver}')
-            return True
-        except Exception as e:
-            print(f'  ✗ {name:14s} import raised: {type(e).__name__}: {str(e)[:100]}')
-    else:
+    if spec is None:
         print(f'  ✗ {name:14s} not installed')
-    if fatal:
-        raise ImportError(f'critical package {name!r} could not be imported — see message above')
-    if fallback_env:
-        os.environ[fallback_env] = '0'
-        print(f'    → set {fallback_env}=0; {fallback_msg}')
-    return False
+        if fatal:
+            raise ImportError(f'critical package {name!r} could not be found')
+        if fallback_env:
+            os.environ[fallback_env] = '0'
+            print(f'    → set {fallback_env}=0; {fallback_msg}')
+        return False
+    if lite:
+        print(f'  ✓ {name:14s} installed (deferred import to Cell 9)')
+        return True
+    try:
+        mod = importlib.import_module(name)
+        ver = getattr(mod, '__version__', '?')
+        print(f'  ✓ {name:14s} {ver}')
+        return True
+    except Exception as e:
+        print(f'  ✗ {name:14s} import raised: {type(e).__name__}: {str(e)[:100]}')
+        if fatal:
+            raise ImportError(f'critical package {name!r} could not be imported') from e
+        if fallback_env:
+            os.environ[fallback_env] = '0'
+            print(f'    → set {fallback_env}=0; {fallback_msg}')
+        return False
 
 _check('numpy',        fatal=True)
 _check('torch',        fatal=True)
+# transformers / peft / trl are imported here — that's fine, they're side-effect-free.
 _check('transformers', fatal=True)
 _check('peft',         fatal=True)
 _check('trl',          fatal=True)
-_check('unsloth',      fatal=True)
-_check('vllm', fallback_env='SENTINEL_USE_VLLM',
+# unsloth / vllm: lite check only — Cell 9 does the real import behind the patches.
+_check('unsloth', fatal=True, lite=True)
+_check('vllm', fallback_env='SENTINEL_USE_VLLM', lite=True,
               fallback_msg='Cell 9 will fall back to HF transformers (slower but works)')
 
 print()
@@ -270,9 +299,39 @@ print(obs[:400])
 CELL8_HEADER = "## 3. Load Qwen3-1.7B (4-bit QLoRA + vLLM colocate)"
 
 CELL9_LOAD = """\
-import importlib.util
+import sys, importlib.util
 
-# ── Pre-import monkeypatch: defuse the `aimv2` registration crash ─────────
+# ── Pre-import monkeypatch #1: defuse OutStream.watch_fd_thread AttributeError
+# unsloth's import side-effects (specifically the tqdm/Inductor patcher in
+# unsloth_zoo) read `sys.stdout.watch_fd_thread`. Newer ipykernel ships this
+# attribute on `OutStream`; the older ipykernel that Colab boots with does
+# NOT. The plain attribute access raises:
+#   AttributeError: 'OutStream' object has no attribute 'watch_fd_thread'
+# and unsloth's import then bombs with `ImportError: critical package 'unsloth'`.
+# Add a no-op shim so the access succeeds. Restarting the kernel doesn't help —
+# Colab respawns with the same ipykernel, so we patch every time.
+class _NoopWatchFdThread:
+    def start(self): pass
+    def join(self, timeout=None): pass
+    def is_alive(self): return False
+    def __bool__(self): return False
+for _stream in (sys.stdout, sys.stderr):
+    if not hasattr(_stream, 'watch_fd_thread'):
+        try:
+            _stream.watch_fd_thread = _NoopWatchFdThread()
+        except Exception:
+            pass  # some streams (e.g. detached file objects) don't allow attr set
+# Some unsloth code paths read this off the underlying class instead of the
+# instance — patch the class too if we can find it.
+try:
+    _OutStreamCls = type(sys.stdout)
+    if 'OutStream' in _OutStreamCls.__name__ and not hasattr(_OutStreamCls, 'watch_fd_thread'):
+        _OutStreamCls.watch_fd_thread = _NoopWatchFdThread()
+except Exception:
+    pass
+print('✓ patched OutStream.watch_fd_thread (no-op) — safe vs unsloth_zoo tqdm patch')
+
+# ── Pre-import monkeypatch #2: defuse the `aimv2` registration crash ──────
 # transformers >= 4.50 natively registers a config named "aimv2".
 # unsloth_zoo 2026.4.4's temporary_patches still calls
 #   CONFIG_MAPPING.register("aimv2", ...)
@@ -295,6 +354,9 @@ try:
 except Exception as _e:
     print(f'⚠ aimv2 monkeypatch skipped: {type(_e).__name__}: {_e}')
 
+# Now safe to import unsloth — its `from unsloth_zoo.temporary_patches import …`
+# chain will hit our two patches above instead of the original AttributeError /
+# ValueError pair.
 from unsloth import FastLanguageModel
 
 # Final auto-fallback: if SENTINEL_USE_VLLM=1 but vllm is not actually
