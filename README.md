@@ -74,6 +74,30 @@ Every frontier LLM we tested — including Qwen2.5-72B — scores below random a
 
 ---
 
+## 🚀 SENTINEL / Live — Use it RIGHT NOW
+
+Beyond a training environment, SENTINEL ships a **live oversight API** any LLM agent can POST to. The trained Overseer becomes a one-line safety check for LangChain, AutoGen, OpenAI tool-use loops, Claude Code — anything that hits an HTTP endpoint.
+
+```bash
+curl -X POST https://elliot89-sentinel.hf.space/live/oversee \
+  -H 'Content-Type: application/json' \
+  -d '{"action_description":"DROP TABLE users","proposed_target":"users","severity_hint":"critical"}'
+# → {"decision":"block","severity_assessed":"catastrophic","shield_triggered":false,"latency_ms":1, ... }
+```
+
+| | |
+|---|---|
+| **Live demo** | First tab on the [HF Space](https://huggingface.co/spaces/Elliot89/sentinel) — paste an action, get a verdict, color-coded with a 0-1 risk gauge. |
+| **Endpoint** | `POST /live/oversee` (heuristic backend always works; trained Qwen3-1.7B used opportunistically when vLLM is reachable). |
+| **🛡️ Prompt-injection shield** | Detects 10 adversarial override patterns ("ignore previous instructions", `<\|im_start\|>`, etc) and force-escalates. |
+| **Lifetime stats** | `GET /live/stats` exposes per-decision, per-severity, p50/p99 latency, catastrophic-blocked, and shield-triggered counts since server start. |
+| **Demo script** | `python tools/agent_demo.py --use-mock-llm` runs a 5-step incident loop in 6 seconds, no API key. |
+| **Full docs** | [SENTINEL_LIVE.md](./SENTINEL_LIVE.md) |
+
+This makes SENTINEL the only OpenEnv submission that's **both** a training environment AND a deployable safety layer — the same `grade_overseer_decision()` function that scored every training step is the one that scores your live verdict. There is no train/serve gap.
+
+---
+
 ## 🧭 Why SENTINEL is different
 
 Every other public OpenEnv we surveyed measures whether an agent can **act** — drive a browser, write code, complete a task. SENTINEL measures whether an agent can **judge** another agent's actions in flight. That's the missing axis in the AI-safety stack and the load-bearing primitive for any deployment beyond toy demos.
