@@ -434,7 +434,7 @@ def _build_gradio_ui() -> gr.Blocks:
     return demo
 
 
-_gradio_demo = _build_gradio_ui()
+_gradio_demo = __import__('server.live_ui', fromlist=['combine_with_live_tab']).combine_with_live_tab(_build_gradio_ui())
 # Mount Gradio at the root path. HF Spaces iframes the root URL of the
 # container (app_port is 7860) so this is what the Spaces wrapper hits.
 # The OpenEnv CLI injects `base_path: /web` into the README frontmatter;
